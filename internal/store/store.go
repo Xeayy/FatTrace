@@ -263,6 +263,7 @@ type SnapshotInfo struct {
 	Files            int64   `json:"files"`
 	Dirs             int64   `json:"dirs"`
 	UniqueAllocBytes int64   `json:"unique_alloc_bytes"`
+	VolumeUsed       int64   `json:"volume_used"`
 	Errors           int64   `json:"errors"`
 	CoveragePct      float64 `json:"coverage_pct"`
 }
@@ -357,7 +358,7 @@ func (s *Store) Status(ctx context.Context) (*Status, error) {
 
 	srows, err := s.db.QueryContext(ctx, `
 		SELECT id, volume_id, kind, status, root, started_at, finished_at, duration_ms,
-		       files, dirs, unique_alloc_bytes, errors, coverage_pct
+		       files, dirs, unique_alloc_bytes, volume_used, errors, coverage_pct
 		FROM snapshots ORDER BY started_at DESC LIMIT 5`)
 	if err != nil {
 		return nil, err
@@ -367,8 +368,8 @@ func (s *Store) Status(ctx context.Context) (*Status, error) {
 		var sn SnapshotInfo
 		var finished sql.NullInt64
 		if err := srows.Scan(&sn.ID, &sn.VolumeID, &sn.Kind, &sn.Status, &sn.Root, &sn.StartedAt,
-			&finished, &sn.DurationMS, &sn.Files, &sn.Dirs, &sn.UniqueAllocBytes, &sn.Errors,
-			&sn.CoveragePct); err != nil {
+			&finished, &sn.DurationMS, &sn.Files, &sn.Dirs, &sn.UniqueAllocBytes, &sn.VolumeUsed,
+			&sn.Errors, &sn.CoveragePct); err != nil {
 			return nil, err
 		}
 		if finished.Valid {

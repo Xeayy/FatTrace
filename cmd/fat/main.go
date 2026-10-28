@@ -28,6 +28,8 @@ func main() {
 		scanCmd(os.Args[2:])
 	case "snap":
 		snapCmd(os.Args[2:])
+	case "diff":
+		diffCmd(os.Args[2:])
 	case "fileid":
 		fileIDCmd(os.Args[2:])
 	case "db":
@@ -51,6 +53,7 @@ func usage() {
 usage:
   fat scan [flags] <root>
   fat snap [flags] <root>
+  fat diff [flags]
   fat fileid <path>
   fat db init [--db path]
   fat status [--json] [--db path]
@@ -68,6 +71,16 @@ snap flags:
   -max-depth int   maximum directory depth (0 = unlimited)
   -no-dedup        do not deduplicate hard links
   -quiet           suppress periodic progress output
+
+diff flags:
+  -from int        from snapshot id (default: previous complete)
+  -to int          to snapshot id (default: latest complete)
+  -volume string   volume root prefix, e.g. "D:"
+  -week            warn when the pair is not about 7 days apart
+  -top int         rows per ranking list (default 20)
+  -cross-volume    annotate added files that match other volumes
+  -db string       database file (overrides FATTRACE_HOME)
+  -json            output JSON
 
 The database defaults to %LOCALAPPDATA%\FatTrace\fattrace.db.
 FATTRACE_HOME overrides the directory; --db overrides the file.`)
