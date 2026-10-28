@@ -93,7 +93,7 @@ func resolveSnapshots(ctx context.Context, st *store.Store, opts Options) (store
 			return from, to, err
 		}
 		for _, sn := range list {
-			if isVolumeRoot(sn.Root) {
+			if model.IsVolumeRoot(sn.Root) {
 				to = sn
 				break
 			}
@@ -161,7 +161,7 @@ func applyVolumeCheck(res *model.DiffResult, from, to store.SnapshotInfo, toDirs
 			res.Check.UnknownDirs++
 		}
 	}
-	if !isVolumeRoot(to.Root) {
+	if !model.IsVolumeRoot(to.Root) {
 		res.Check.OK = true
 		res.Check.Skipped = true
 		res.Check.Message = "snapshot root is not a volume root"
@@ -199,16 +199,4 @@ func appendCoverageWarnings(res *model.DiffResult, from, to store.SnapshotInfo) 
 	}
 	check("from", from)
 	check("to", to)
-}
-
-func isVolumeRoot(root string) bool {
-	vol := filepath.VolumeName(root)
-	if len(vol) != 2 || vol[1] != ':' {
-		return false
-	}
-	clean := filepath.Clean(root)
-	if len(clean) == 2 && clean[1] == ':' {
-		return true
-	}
-	return strings.EqualFold(clean, vol+`\`)
 }

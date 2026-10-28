@@ -1,7 +1,7 @@
 # FatTrace 项目交接文档
 
 - 更新时间：2026-10-28
-- 状态：**M0–M4 已完成并通过门禁；M5（本地只读 UI）待开始**
+- 状态：**M0–M5 已完成并通过门禁；M6（解释层）待开始**
 - 项目根目录：`D:\FatTraceDemo\FatTrace`
 
 ## 0. 项目一句话
@@ -36,11 +36,12 @@ cd /d/FatTraceDemo/FatTraceDemo/FatTrace
 FatTrace/
   go.mod                        module fattrace, go 1.27.0（modernc.org/sqlite v1.61.0）
   .gitignore
-  cmd/fat/main.go               CLI 入口：scan / snap / diff / report / fileid / db / status / version
+  cmd/fat/main.go               CLI 入口：scan / snap / diff / report / serve / fileid / db / status / version
   cmd/fat/db.go                 CLI: db init / status
   cmd/fat/snap.go               CLI: snap（进度、Ctrl+C/Ctrl+Break、JSON）
   cmd/fat/diff.go               CLI: diff（配对、--week、Top-N、表格/JSON，只读连接）
   cmd/fat/report.go             CLI: report（单文件 HTML，只读连接）
+  cmd/fat/serve.go              CLI: serve（回环监听、每会话 token、打印 #t= URL）
   internal/model/model.go       FileRecord / ScanError / ScanStats
   internal/model/diff.go        DiffResult / FileChange / DirChange / FileCandidate
   internal/diff/diff.go         纯函数引擎：FRN join、分类、move 归属、Top-N
@@ -65,13 +66,22 @@ FatTrace/
   internal/store/aggregate.go   目录自底向上聚合 + unknown 传播
   internal/store/snapshot.go    快照生命周期与原子切换
   internal/store/snapshot_read.go 快照读取、流式扫描、配对查询、跨卷候选、按快照取错误
-  internal/store/store_test.go / snapshot_test.go  共 18 个 store 测试
+  internal/store/browse.go      目录下钻（FRN/面包屑/单层子项）与卷根趋势
+  internal/store/store_test.go / snapshot_test.go / browse_test.go  共 21 个 store 测试
+  internal/server/server.go     只读 server：embed、路由、token 鉴权、安全头、优雅退出
+  internal/server/api.go        /api/status|snapshots|diff|dir|trend + diff 结果缓存
+  internal/server/server_test.go API 鉴权/口径/缓存/错误映射测试
+  internal/server/latency_test.go 真实库 P95 门禁（需 FATTRACE_DB）
+  internal/server/web/index.html SPA 外壳与导航
+  internal/server/web/app.js    原生 ES module：路由、treemap、sparkline、六个视图
+  internal/server/web/app.css   深色只读主题
   fat.exe                       本地构建产物（被 .gitignore 忽略）
   docs/m0-results.md            M0 实测记录
   docs/m1-results.md            M1 实测记录
   docs/m2-results.md            M2 实测记录
   docs/m3-results.md            M3 实测记录
   docs/m4-results.md            M4 实测记录
+  docs/m5-results.md            M5 实测记录
 ```
 
 ### 已实现能力
@@ -125,6 +135,17 @@ FatTrace/
 - 安全：JSON 默认 HTML 转义（`</script>` 无法逃逸），DOM 全部 `textContent`；测试覆盖恶意文件名。
 - 实测 #2→#3：+137.76 MiB，treemap 块面积和精确等于净增长，错误摘要 3 条；headless Chrome 离线截图验证。细节见 `docs/m4-results.md`。
 
+### M5 已实现（本地只读 UI）
+
+- `fat serve`：`net/http` 只读 API + `//go:embed` 内嵌 SPA；默认 `127.0.0.1:0`，仅回环地址可启动。
+- API：`/api/status`、`/api/snapshots`、`/api/diff`、`/api/dir?snapshot=&frn=&dirs=&files=`、`/api/trend?volume=&limit=`；diff 复用 `diff.Run`，与 CLI/周报同源。
+- 安全：每会话 128-bit token，`X-FatTrace-Token` 常量时间比较；token 只出现在启动 URL 的 `#t=` 片段，SPA 转存 sessionStorage 后 `history.replaceState` 清除；CSP `default-src 'none'` + 自资源白名单，`no-store`、`nosniff`、`no-referrer`；无写接口，非 GET 405。
+- 下钻：`(snapshot_id, frn)` 定位，`frn=0` 解析卷根；单层最多 500 目录/200 文件并带截断标志；面包屑由递归 CTE 生成（`hop < 256`），路径仅展示。
+- SPA：原生 ES module，无构建链/CDN/内联脚本；六个视图——总览、目录下钻、两周对比、时间轴（sparkline + 快照表）、规则与设置（只读说明）、状态。
+- Canvas：squarified treemap，DPR/resize、单层绘制、悬停 tooltip、点击下钻、unknown 斜纹；10 万+ 节点靠逐层按需加载。
+- diff 缓存：键含 `{from,to,topN,cross,latestSnapshotID}`，锁内计算、上限 8 条；冷 diff 1.7 s → 热 1 ms。
+- 实测（D: 46 万文件）：P95 status 85 ms、dir-root 114 ms、dir-deep 119 ms、trend 1 ms、diff-warm 1 ms，全部 < 200 ms；六视图 headless Chrome 冒烟通过。细节见 `docs/m5-results.md`。
+
 ### 当前 CLI
 
 ```bash
@@ -144,6 +165,9 @@ FatTrace/
 ./fat.exe report                       # 生成 fattrace-report.html
 ./fat.exe report --week --top 20 --out week.html
 ./fat.exe report --from 2 --to 3 --out report.html
+./fat.exe serve                        # 默认库、随机回环端口，打印带 token 的 URL
+./fat.exe serve --db 'D:\...\fattrace.db' --addr 127.0.0.1:8765
+./fat.exe serve --top 50               # 调整 diff 榜单条数
 ./fat.exe fileid "D:/some/file.bin"
 ./fat.exe db init
 ./fat.exe db init --db "D:/tmp/test.db"
@@ -178,7 +202,7 @@ FatTrace/
 - 非目标：自动清理、实时防护、网络盘 / 非 NTFS。
 - 产品原则：建议不等于执行；删除永远由用户操作。
 
-## 5. 里程碑定案与 M5 计划
+## 5. 里程碑定案与 M6 计划
 
 ### M2 定案（开工前三问的答案）
 
@@ -209,26 +233,34 @@ FatTrace/
 - **内嵌数据**：Top-N 列表 + treemap 数据直接内联，不嵌整棵目录树；28 KiB 量级。
 - **单文件安全**：JSON 标记替换 + `encoding/json` HTML 转义；DOM 只用 `textContent`。
 
-### M5：本地只读 UI（下一步）
+### M5 定案（已实现）
 
-目标：只读 API + 内嵌 SPA：总览、目录下钻、两周对比、时间轴、7 周 sparkline、规则/设置、状态页；Canvas 逐层渲染，不一次画全卷。
+- **API 身份用 FRN + 快照，路径只展示**：跨快照稳定；`frn=0` 解析该快照卷根，前端无需知道路径。
+- **SPA 手写 ES module**：无构建链、无 CDN、无内联脚本，`embed` 进二进制；CSP 可以收到 `default-src 'none'`。
+- **token 走 URL 片段 + 自定义头**：片段不进服务器日志；sessionStorage 仅当前标签页；不用 cookie，避免 CSRF。
+- **下钻单层上限 500 目录 / 200 文件**：响应保持几十 KiB，Canvas 只画当前层；超出用截断标志提示继续下钻。
+- **趋势只取 complete 卷根**：partial 覆盖率不可比，子目录快照不进入卷级时间轴。
+- **diff 缓存缓最终结果**：键含最新快照 ID，锁内计算防并发重复；不缓存 from 索引（会被消费）。
+- **UI 只读**：无写接口、无删除/清理入口；规则页只解释口径与保留计划。
 
-门禁：10 万节点交互可用；API P95 < 200ms；仅监听 `127.0.0.1` + 每会话 token。
+### M6：解释层（下一步）
+
+目标：内置约 40 条规则（浏览器缓存、pip/npm/NuGet、WSL/Docker vhdx、WinSxS、VSS、Defender、Temp、CBS 日志等），YAML 可扩展；增长按规则归类，“unexplained” 单独排名。
+
+门禁：真实一周数据中 ≥ 70% 增长被解释；建议只提示、绝不自动删除。
 
 建议步骤：
 
-1. `internal/server`：`net/http` 只读 API（`/api/status`、`/api/snapshots`、`/api/diff`、`/api/dir?frn=&snapshot=`、`/api/trend`），复用 store/diff 服务层，不引入 ORM。
-2. 静态 SPA：`embed` 资源、无外部 CDN；随机 token，仅回环监听；UI 不提权。
-3. 目录下钻按需加载子目录，Canvas 分层绘制 + 视口裁剪，10 万节点只渲染可见层。
-4. 两周对比与 7 周 sparkline 基于 `snap_dirs` 聚合，不加载文件级行。
-5. 验收：真实 D: 库；API P95 采样；UI 冒烟（总览/下钻/对比/时间轴/状态）。
+1. `internal/rules`：规则模型（匹配路径/文件名/进程线索、解释模板、置信度），内置 YAML 经 `embed` 打包，支持用户 YAML 覆盖。
+2. 把规则挂在 `DiffResult` 的目录/文件条目上（只加标注，不改 Δ），计算“已解释 / 未解释”占比与 unexplained 榜单。
+3. 周报与 SPA 展示解释列、占比横幅、unexplained 排名；规则页从静态说明升级为已加载规则列表。
+4. 验收：用 D: 真实快照（最好积累一周）跑 ≥ 70% 解释率；黄金用例覆盖“路径匹配”“歧义匹配”“不匹配”。
 
-M5 开工前要定：
+开工前要定：
 
-- API 暴露 FRN 还是路径（FRN 稳定，路径会变；跨快照需解析）；
-- SPA 构建方式（手写 ES 模块 vs 构建链，禁止 CDN）；
-- 目录下钻的分页/上限；
-- token 传递方式（header vs cookie）与 UI 不提权的边界。
+- 规则匹配优先级与冲突处理（多规则命中取最具体路径）；
+- 解释率的分子分母（按字节还是按条目；建议按 Δ 字节）；
+- 用户规则文件放哪、如何避免误伤（只标注不删除）。
 
 开发样本：`D:\FatTraceDemo\.cache\fattrace\fattrace.db` 已有 D: 的真实快照（#2/#3 全卷、#1/#6 子目录），可直接做 diff/周报联调；其中 #4 partial、#5 failed 用于异常路径。
 
@@ -268,6 +300,16 @@ M5 开工前要定：
 - 周报数据标记是 `"__FATTRACE_DATA__"`，替换前模板必须是合法 JSON；`encoding/json` 会把 `<>&` 转义，文件路径无法闭合 `</script>`。
 - `scan_errors` 是聚合表，`SnapshotErrors` 按 `last_snapshot_id` 归属；后一次扫描命中同一错误会把归属移到新快照，旧周报不再显示它。
 - `fat diff` / `fat report` 用 `OpenReader`：库必须已初始化（`fat db init` 或至少一次 `fat snap`），且只读连接不会自动迁移旧 schema。
+- `internal/server/web/*` 也是 `//go:embed`：改 `app.js`/`app.css`/`index.html` 后必须重新 `go build`，否则 `fat.exe` 里还是旧资源。
+- SQLite 连接 `SetMaxOpenConns(1)`：diff 计算会独占唯一连接，期间 status/dir 排队；API 端缓存 diff 结果，别在 handler 里并发跑多次 diff。
+- diff 缓存键必须包含最新快照 ID：否则新快照落地后仍返回旧配对结果；`clear(map)` 清空只用于控内存，不影响正确性。
+- token 只在启动 URL 的 `#t=` 片段里：不要把它写进日志、Referer 或服务端 URL；SPA 取到后立刻 `history.replaceState`。
+- `dirPath` 拼接：卷根要保留 `D:\`，子目录不要多余尾斜杠；只有 `len(breadcrumb)==1 && model.IsVolumeRoot` 时补 `\`。
+- `model.IsVolumeRoot` 是共享规则：diff 默认配对、趋势过滤、路径展示都依赖它；改判定会同时影响三处。
+- CSP 是 `default-src 'none'`：新增资源必须走 `/app.js`/`/app.css` 或 `img-src` 白名单；不能加内联 `<script>`/`style`/`onclick`。
+- API 错误映射：快照/目录不存在 → 404，参数非法或 diff 校验失败 → 400；不要在 404 时返回 500。
+- JSON 里 nil slice 要归一成 `[]`，否则前端拿到 `null` 直接 `forEach` 报错；`DirChild.Files` 不能 `omitempty`，空目录要显示 0。
+- `go test ./internal/server -run TestRealDBLatencyP95` 需要 `FATTRACE_DB`，且不要和 store 吞吐测试并行跑，I/O 争抢会让 P95/吞吐误报。
 
 ## 7. 风险与安全提醒
 
@@ -280,7 +322,7 @@ M5 开工前要定：
 
 新对话可以直接发：
 
-> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`，从 M5 本地只读 UI 开始继续 FatTrace 项目。保持“所有工具/缓存都在工作区”的原则。
+> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`，从 M6 解释层开始继续 FatTrace 项目。保持“所有工具/缓存都在工作区”的原则。
 
 接手后先跑：
 
@@ -290,9 +332,9 @@ cd /d/FatTraceDemo/FatTraceDemo/FatTrace
 go test ./... -count=1
 export FATTRACE_HOME='D:\FatTraceDemo\.cache\fattrace'
 ./fat.exe status
-./fat.exe snap --quiet --max-depth 2 "D:/FatTraceDemo"
 ./fat.exe diff --from 2 --to 3
 ./fat.exe report --from 2 --to 3 --out 'D:\FatTraceDemo\.cache\fattrace\report-2-3.html'
+./fat.exe serve --db 'D:\FatTraceDemo\.cache\fattrace\fattrace.db' --addr 127.0.0.1:0
 ```
 
-确认测试全绿、`fat diff`/`fat report` 能复现 `docs/m3-results.md`、`docs/m4-results.md` 的输出后，进入 M5。
+确认测试全绿、`fat diff`/`fat report`/`fat serve` 能复现 `docs/m3-results.md`、`docs/m4-results.md`、`docs/m5-results.md` 的输出后，进入 M6。
