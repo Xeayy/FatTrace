@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FatTrace 周报</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1c232c;
+    --line: #2a3340;
+    --text: #e6edf3;
+    --muted: #8b98a9;
+    --pos: #f0a33c;
+    --neg: #5fb3f7;
+    --ok: #3fb950;
+    --warn: #d29922;
+    --danger: #f85149;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 14px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 24px clamp(16px, 4vw, 48px) 40px;
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+  header.top {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 20px;
+    padding-bottom: 16px; border-bottom: 1px solid var(--line); margin-bottom: 20px;
+  }
+  .brand { font-size: 20px; font-weight: 650; letter-spacing: .2px; }
+  .brand span { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 8px; }
+  .period { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .period b { color: var(--text); font-weight: 550; }
+  .spacer { flex: 1; }
+  .root-chip {
+    border: 1px solid var(--line); background: var(--panel); border-radius: 999px;
+    padding: 4px 12px; font-variant-numeric: tabular-nums;
+  }
+  .banners { display: grid; gap: 8px; margin-bottom: 16px; }
+  .banner {
+    display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;
+    border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px;
+    padding: 9px 14px; background: var(--panel);
+  }
+  .banner b { font-weight: 600; }
+  .banner span { color: var(--muted); }
+  .banner.warn { border-left-color: var(--warn); }
+  .banner.danger { border-left-color: var(--danger); }
+  .banner.info { border-left-color: var(--neg); }
+  .kpis {
+    display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    margin-bottom: 20px;
+  }
+  .kpi {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; min-height: 92px;
+  }
+  .kpi .label { color: var(--muted); font-size: 12px; letter-spacing: .3px; }
+  .kpi .value { font-size: 24px; font-weight: 650; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .kpi .sub { color: var(--muted); font-size: 12px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .pos { color: var(--pos); }
+  .neg { color: var(--neg); }
+  .zero { color: var(--muted); }
+  .ok { color: var(--ok); }
+  .warn { color: var(--warn); }
+  .danger { color: var(--danger); }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px; margin-bottom: 16px; min-width: 0;
+  }
+  .panel h2 {
+    margin: 0 0 12px; font-size: 14px; font-weight: 600; letter-spacing: .2px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .panel h2 .note { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .treemap-wrap { position: relative; width: 100%; }
+  #treemap { display: block; width: 100%; height: auto; border-radius: 6px; }
+  .legend { display: flex; gap: 14px; color: var(--muted); font-size: 12px; }
+  .legend .swatch {
+    display: inline-block; width: 12px; height: 12px; border-radius: 3px;
+    background: var(--pos); margin-right: 6px; vertical-align: -1px;
+  }
+  .legend .hatch-swatch {
+    background: repeating-linear-gradient(45deg, #b9852f 0 3px, #4a3a1c 3px 6px);
+  }
+  .tooltip {
+    position: absolute; pointer-events: none; opacity: 0; transition: opacity .08s;
+    background: #0b0e12; border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 10px; font-size: 12px; max-width: 420px; z-index: 5;
+    box-shadow: 0 8px 24px rgba(0,0,0,.45); font-variant-numeric: tabular-nums;
+  }
+  .tooltip .tt-title { font-weight: 600; word-break: break-all; }
+  .tooltip .tt-meta { color: var(--muted); margin-top: 3px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .grid .panel.wide { grid-column: 1 / -1; }
+  .rows { list-style: none; margin: 0; padding: 0; }
+  .row {
+    display: flex; gap: 14px; align-items: flex-start; justify-content: space-between;
+    padding: 8px 0; border-top: 1px solid rgba(42,51,64,.55);
+  }
+  .row:first-child { border-top: 0; }
+  .row-main { min-width: 0; }
+  .row-title { word-break: break-all; }
+  .row-meta { color: var(--muted); font-size: 12px; margin-top: 2px; word-break: break-all; font-variant-numeric: tabular-nums; }
+  .row-delta { white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .tag {
+    display: inline-block; border: 1px solid var(--line); border-radius: 999px;
+    padding: 0 7px; font-size: 11px; color: var(--muted); margin-right: 6px;
+  }
+  .empty { color: var(--muted); padding: 8px 0; }
+  .check-table {
+    display: grid; grid-template-columns: max-content 1fr; gap: 4px 18px;
+    margin-bottom: 12px; font-variant-numeric: tabular-nums;
+  }
+  .check-table .k { color: var(--muted); }
+  footer { color: var(--muted); font-size: 12px; margin-top: 24px; border-top: 1px solid var(--line); padding-top: 12px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">FatTrace<span>weekly report</span></div>
+  <div class="period" id="period"></div>
+  <div class="spacer"></div>
+  <div class="root-chip" id="root"></div>
+</header>
+
+<section class="banners" id="banners"></section>
+<section class="kpis" id="kpis"></section>
+
+<section class="panel">
+  <h2>谁胖了 · 目录增长
+    <span class="note">面积 = move-adjusted 实占增长，同一笔增量只归最深目录</span>
+    <span class="spacer"></span>
+    <span class="legend">
+      <span><i class="swatch"></i>增长目录</span>
+      <span><i class="swatch hatch-swatch"></i>含不可读目录</span>
+    </span>
+  </h2>
+  <div class="treemap-wrap" id="treemap-wrap">
+    <canvas id="treemap"></canvas>
+    <div class="tooltip" id="tooltip"></div>
+  </div>
+</section>
+
+<section class="grid">
+  <div class="panel"><h2>文件增长 Top <span class="note">新增 + 变大</span></h2><div id="files-growth"></div></div>
+  <div class="panel"><h2>文件删除 Top</h2><div id="files-deleted"></div></div>
+  <div class="panel"><h2>目录增长 Top</h2><div id="dirs-growth"></div></div>
+  <div class="panel"><h2>目录缩小 Top</h2><div id="dirs-shrunk"></div></div>
+  <div class="panel"><h2>文件 move / rename</h2><div id="file-moves"></div></div>
+  <div class="panel"><h2>目录 move / rename</h2><div id="dir-moves"></div></div>
+  <div class="panel wide"><h2>扫描错误 <span class="note">来自 to 快照</span></h2><div id="errors"></div></div>
+  <div class="panel wide"><h2>校验与警告</h2><div id="warnings"></div></div>
+</section>
+
+<footer>
+  单文件离线报告，无外部请求 · FatTrace · <span id="generated"></span>
+</footer>
+
+<script id="report-data" type="application/json">"__FATTRACE_DATA__"</script>
+<script>
+(function () {
+  "use strict";
+  const D = JSON.parse(document.getElementById("report-data").textContent);
+  const $ = (id) => document.getElementById(id);
+
+  function fmtBytes(n, signed) {
+    const neg = n < 0;
+    let v = Math.abs(n);
+    let s;
+    if (v < 1024) {
+      s = v + " B";
+    } else {
+      const units = ["KiB", "MiB", "GiB", "TiB", "PiB"];
+      let u = -1;
+      do { v /= 1024; u++; } while (v >= 1024 && u < units.length - 1);
+      s = (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)) + " " + units[u];
+    }
+    if (neg) return "-" + s;
+    return signed && n > 0 ? "+" + s : s;
+  }
+  function fmtCount(n) { return Number(n).toLocaleString("en-US"); }
+  function fmtPct(n) { return (Math.round(n * 100) / 100).toFixed(2) + "%"; }
+  function fmtDate(ms) {
+    if (!ms) return "—";
+    return new Date(ms).toLocaleString("zh-CN", {
+      year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"
+    });
+  }
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined && text !== null) e.textContent = text;
+    return e;
+  }
+  function signClass(n) { return n > 0 ? "pos" : n < 0 ? "neg" : "zero"; }
+  function signedBytes(n) { return fmtBytes(n, true); }
+
+  // ---------- header ----------
+  document.title = "FatTrace 周报 · " + D.root;
+  $("root").textContent = D.root + " · " + D.span_days.toFixed(1) + " 天";
+  const period = $("period");
+  period.appendChild(el("b", null, "#" + D.from_snapshot.id + " " + fmtDate(D.from_snapshot.started_at_ms)));
+  period.appendChild(document.createTextNode("  →  "));
+  period.appendChild(el("b", null, "#" + D.to_snapshot.id + " " + fmtDate(D.to_snapshot.started_at_ms)));
+  $("generated").textContent = "生成于 " + fmtDate(D.generated_at_ms);
+
+  // ---------- banners ----------
+  const banners = $("banners");
+  function banner(kind, title, detail) {
+    const b = el("div", "banner " + kind);
+    b.appendChild(el("b", null, title));
+    if (detail) b.appendChild(el("span", null, detail));
+    banners.appendChild(b);
+  }
+  const to = D.to_snapshot, check = D.volume_check, totals = D.totals;
+  if (to.coverage_pct > 0 && to.coverage_pct < 95) {
+    banner("warn", "覆盖率 " + fmtPct(to.coverage_pct), "低于 95%：受保护或不可读目录未计入，实际增量可能更高。");
+  }
+  if (check.skipped) {
+    banner("info", "卷级校验已跳过", check.message || "");
+  } else if (!check.ok) {
+    banner("danger", "卷级校验未通过 · 偏差 " + fmtPct(check.diff_pct),
+      (check.message || "") + "（根 Δ " + signedBytes(check.root_delta_alloc) + "，卷 Δ " + signedBytes(check.disk_delta_alloc) + "）");
+  }
+  if (D.warnings && D.warnings.length) {
+    banner("warn", "数据质量警告 " + D.warnings.length + " 条", "详见“校验与警告”。");
+  }
+
+  // ---------- kpis ----------
+  const kpis = $("kpis");
+  function kpi(label, value, sub, cls) {
+    const card = el("div", "kpi");
+    card.appendChild(el("div", "label", label));
+    const v = el("div", "value" + (cls ? " " + cls : ""), value);
+    card.appendChild(v);
+    if (sub) card.appendChild(el("div", "sub", sub));
+    kpis.appendChild(card);
+  }
+  kpi("净增长（实占）", signedBytes(totals.delta_alloc),
+    "逻辑 " + signedBytes(totals.delta_bytes), signClass(totals.delta_alloc));
+  kpi("文件数", (to.files - D.from_snapshot.files >= 0 ? "+" : "") + fmtCount(to.files - D.from_snapshot.files),
+    fmtCount(D.from_snapshot.files) + " → " + fmtCount(to.files));
+  kpi("唯一实占", fmtBytes(to.unique_alloc_bytes),
+    fmtBytes(D.from_snapshot.unique_alloc_bytes) + " → " + fmtBytes(to.unique_alloc_bytes));
+  kpi("变更事件", fmtCount(totals.files_added + totals.files_deleted + totals.files_grown + totals.files_shrunk),
+    fmtCount(totals.files_added) + " 新增 · " + fmtCount(totals.files_deleted) + " 删除 · " +
+    fmtCount(totals.files_grown) + " 变大 · " + fmtCount(totals.files_shrunk) + " 变小");
+  if (check.skipped) {
+    kpi("卷级校验", "SKIPPED", check.message || "无法对比卷用量", "zero");
+  } else {
+    kpi("卷级校验", check.ok ? "OK" : "WARN",
+      "偏差 " + fmtPct(check.diff_pct) + " · 根 Δ " + signedBytes(check.root_delta_alloc),
+      check.ok ? "ok" : "danger");
+  }
+  kpi("覆盖率", to.coverage_pct > 0 ? fmtPct(to.coverage_pct) : "—",
+    check.unknown_dirs_after > 0 ? check.unknown_dirs_after + " 个目录不可读" : "无不可读目录",
+    to.coverage_pct > 0 && to.coverage_pct < 95 ? "warn" : "");
+
+  // ---------- treemap ----------
+  const wrap = $("treemap-wrap");
+  const canvas = $("treemap");
+  const tooltip = $("tooltip");
+  const palette = ["#f0a33c", "#e2842f", "#d96a3a", "#cd5a56", "#b9557e", "#9760ab", "#7469c9", "#4f83c9", "#3f9fb8", "#3fa98e"];
+  let rects = [];
+  let hover = -1;
+
+  function worst(areas, side) {
+    let sum = 0, max = 0, min = Infinity;
+    for (const a of areas) {
+      sum += a;
+      if (a > max) max = a;
+      if (a < min) min = a;
+    }
+    if (!(sum > 0) || min === Infinity) return Infinity;
+    const s2 = sum * sum, side2 = side * side;
+    return Math.max((side2 * max) / s2, s2 / (side2 * min));
+  }
+
+  function squarify(items, x, y, w, h) {
+    const list = items
+      .filter((i) => i.delta_alloc > 0)
+      .map((i) => ({ item: i, value: i.delta_alloc }))
+      .sort((a, b) => b.value - a.value);
+    const total = list.reduce((s, i) => s + i.value, 0);
+    if (!(total > 0) || w <= 0 || h <= 0) return [];
+    const scale = (w * h) / total;
+    const out = [];
+    let rx = x, ry = y, rw = w, rh = h, idx = 0;
+    while (idx < list.length && rw > 0.5 && rh > 0.5) {
+      const side = Math.min(rw, rh);
+      let areas = [], row = [], best = Infinity, j = idx;
+      while (j < list.length) {
+        const area = list[j].value * scale;
+        const trial = areas.concat(area);
+        const ratio = worst(trial, side);
+        if (row.length === 0 || ratio <= best) {
+          best = ratio;
+          areas = trial;
+          row.push(list[j]);
+          j++;
+        } else {
+          break;
+        }
+      }
+      const rowSum = areas.reduce((s, a) => s + a, 0);
+      if (rw >= rh) {
+        const rwRow = rowSum / rh;
+        let oy = ry;
+        for (let k = 0; k < row.length; k++) {
+          const hh = areas[k] / rwRow;
+          out.push({ item: row[k].item, x: rx, y: oy, w: rwRow, h: hh });
+          oy += hh;
+        }
+        rx += rwRow;
+        rw -= rwRow;
+      } else {
+        const rhRow = rowSum / rw;
+        let ox = rx;
+        for (let k = 0; k < row.length; k++) {
+          const ww = areas[k] / rhRow;
+          out.push({ item: row[k].item, x: ox, y: ry, w: ww, h: rhRow });
+          ox += ww;
+        }
+        ry += rhRow;
+        rh -= rhRow;
+      }
+      idx += row.length;
+    }
+    return out;
+  }
+
+  let hatch = null;
+  function hatchPattern(ctx) {
+    if (hatch) return hatch;
+    const p = document.createElement("canvas");
+    p.width = p.height = 8;
+    const c = p.getContext("2d");
+    c.strokeStyle = "rgba(255,255,255,0.30)";
+    c.lineWidth = 1.5;
+    c.beginPath();
+    c.moveTo(-2, 10); c.lineTo(10, -2);
+    c.moveTo(2, 10); c.lineTo(10, 2);
+    c.stroke();
+    hatch = ctx.createPattern(p, "repeat");
+    return hatch;
+  }
+
+  function truncate(ctx, text, maxWidth) {
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let s = text;
+    while (s.length > 1 && ctx.measureText(s + "…").width > maxWidth) s = s.slice(0, -1);
+    return s + "…";
+  }
+
+  function draw() {
+    const dpr = window.devicePixelRatio || 1;
+    const W = Math.max(320, wrap.clientWidth);
+    const H = Math.max(320, Math.round(Math.min(560, Math.max(360, W * 0.42))));
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    canvas.style.height = H + "px";
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    rects = squarify(D.tiles || [], 0, 0, W, H);
+    if (!rects.length) {
+      ctx.fillStyle = "#8b98a9";
+      ctx.font = "14px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("这个区间没有目录增长", W / 2, H / 2);
+      return;
+    }
+
+    rects.forEach((r, i) => {
+      const pad = 1.5;
+      const x = r.x + pad, y = r.y + pad;
+      const w = Math.max(0, r.w - pad * 2), h = Math.max(0, r.h - pad * 2);
+      if (w <= 0 || h <= 0) return;
+      const color = palette[i % palette.length];
+      ctx.fillStyle = color;
+      ctx.globalAlpha = i === hover ? 1 : 0.82;
+      ctx.fillRect(x, y, w, h);
+      ctx.globalAlpha = 1;
+      if (r.item.unknown) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+        ctx.clip();
+        ctx.fillStyle = hatchPattern(ctx);
+        ctx.fillRect(x, y, w, h);
+        ctx.restore();
+      }
+      if (i === hover) {
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+      }
+      const label = r.item.label || r.item.path;
+      if (w > 240 && h > 150) {
+        ctx.save();
+        ctx.fillStyle = "rgba(10,12,15,0.9)";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "700 19px system-ui, sans-serif";
+        ctx.fillText(truncate(ctx, label, w - 60), x + w / 2, y + h / 2 - 13);
+        ctx.font = "600 14px system-ui, sans-serif";
+        ctx.fillText(signedBytes(r.item.delta_alloc), x + w / 2, y + h / 2 + 15);
+        ctx.restore();
+      } else if (w > 76 && h > 30) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x + 6, y + 4, w - 12, h - 8);
+        ctx.clip();
+        ctx.fillStyle = "rgba(10,12,15,0.88)";
+        ctx.font = "600 12px system-ui, sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText(truncate(ctx, label, w - 14), x + 7, y + 6);
+        if (h > 48) {
+          ctx.font = "11px system-ui, sans-serif";
+          ctx.fillText(signedBytes(r.item.delta_alloc), x + 7, y + 22);
+        }
+        ctx.restore();
+      }
+    });
+  }
+
+  function hitTest(px, py) {
+    for (let i = rects.length - 1; i >= 0; i--) {
+      const r = rects[i];
+      if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) return i;
+    }
+    return -1;
+  }
+
+  function showTooltip(i, px, py) {
+    if (i < 0) {
+      tooltip.style.opacity = "0";
+      return;
+    }
+    const t = rects[i].item;
+    tooltip.textContent = "";
+    tooltip.appendChild(el("div", "tt-title", t.path || t.label));
+    const meta = signedBytes(t.delta_alloc) + " 实占增长";
+    const extra = t.files ? " · " + fmtCount(t.files) + " 文件" : "";
+    tooltip.appendChild(el("div", "tt-meta", meta + extra + (t.unknown ? " · 含不可读目录" : "")));
+    const wrapW = wrap.clientWidth;
+    const tw = Math.min(420, tooltip.offsetWidth || 200);
+    tooltip.style.left = Math.min(Math.max(8, px + 14), Math.max(8, wrapW - tw - 8)) + "px";
+    tooltip.style.top = Math.max(8, py + 14) + "px";
+    tooltip.style.opacity = "1";
+  }
+
+  canvas.addEventListener("mousemove", (ev) => {
+    const box = canvas.getBoundingClientRect();
+    const px = ev.clientX - box.left;
+    const py = ev.clientY - box.top;
+    const i = hitTest(px, py);
+    showTooltip(i, px, py);
+    if (i !== hover) {
+      hover = i;
+      requestAnimationFrame(draw);
+    }
+  });
+  canvas.addEventListener("mouseleave", () => {
+    hover = -1;
+    tooltip.style.opacity = "0";
+    requestAnimationFrame(draw);
+  });
+
+  let resizeTimer = 0;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(draw, 80);
+  });
+
+  // ---------- lists ----------
+  function list(id, items, rowFn, emptyText) {
+    const root = $(id);
+    root.textContent = "";
+    if (!items || !items.length) {
+      root.appendChild(el("div", "empty", emptyText));
+      return;
+    }
+    const ul = el("ul", "rows");
+    items.forEach((it) => ul.appendChild(rowFn(it)));
+    root.appendChild(ul);
+  }
+
+  function fileRow(f, mode) {
+    const li = el("li", "row");
+    const main = el("div", "row-main");
+    main.appendChild(el("div", "row-title", f.path || f.name));
+    let meta;
+    if (mode === "growth") {
+      if (f.kind === "added") {
+        meta = "新增";
+        if (f.suspected_from_volume) {
+          meta += " · 疑似跨卷移入 0x" + f.suspected_from_volume.toString(16).toUpperCase().padStart(8, "0");
+        }
+      } else {
+        meta = fmtBytes(f.alloc_before) + " → " + fmtBytes(f.alloc_after);
+      }
+    } else {
+      meta = "删除 · 原有 " + fmtBytes(f.alloc_before);
+    }
+    main.appendChild(el("div", "row-meta", meta));
+    li.appendChild(main);
+    li.appendChild(el("div", "row-delta " + signClass(f.delta_alloc), signedBytes(f.delta_alloc)));
+    return li;
+  }
+
+  function dirRow(d) {
+    const li = el("li", "row");
+    const main = el("div", "row-main");
+    main.appendChild(el("div", "row-title", d.path || d.name));
+    main.appendChild(el("div", "row-meta",
+      fmtCount(d.files_after) + " 文件 · " + fmtBytes(d.total_alloc_after) + " 实占" +
+      (d.unknown_after ? " · 含不可读目录" : "")));
+    li.appendChild(main);
+    li.appendChild(el("div", "row-delta " + signClass(d.delta_alloc), signedBytes(d.delta_alloc)));
+    return li;
+  }
+
+  function moveRow(c, isDir) {
+    const li = el("li", "row");
+    const main = el("div", "row-main");
+    const title = el("div", "row-title", c.path || c.name);
+    main.appendChild(title);
+    const meta = el("div", "row-meta");
+    meta.appendChild(el("span", "tag", c.kind === "renamed" ? "rename" : "move"));
+    if (c.old_path && c.old_path !== c.path) meta.appendChild(document.createTextNode("从 " + c.old_path));
+    main.appendChild(meta);
+    li.appendChild(main);
+    const size = isDir ? c.total_alloc_after : c.alloc_after;
+    li.appendChild(el("div", "row-delta zero", fmtBytes(size)));
+    return li;
+  }
+
+  function errorRow(e) {
+    const li = el("li", "row");
+    const main = el("div", "row-main");
+    main.appendChild(el("div", "row-title", e.path));
+    main.appendChild(el("div", "row-meta", "[" + e.op + "] " + e.msg));
+    li.appendChild(main);
+    li.appendChild(el("div", "row-delta zero", e.hits + " 次"));
+    return li;
+  }
+
+  list("files-growth", D.top_growth, (f) => fileRow(f, "growth"), "没有文件增长");
+  list("files-deleted", D.top_deleted, (f) => fileRow(f, "deleted"), "没有文件删除");
+  list("dirs-growth", D.top_growth_dirs, dirRow, "没有目录增长");
+  list("dirs-shrunk", D.top_shrunk_dirs, dirRow, "没有目录缩小");
+  list("file-moves", D.file_moves, (c) => moveRow(c, false), "没有文件 move/rename");
+  list("dir-moves", D.dir_moves, (c) => moveRow(c, true), "没有目录 move/rename");
+  list("errors", D.errors, errorRow, "没有记录到扫描错误");
+
+  // ---------- check + warnings ----------
+  const warnRoot = $("warnings");
+  warnRoot.textContent = "";
+  const table = el("div", "check-table");
+  function checkRow(k, v, cls) {
+    table.appendChild(el("div", "k", k));
+    table.appendChild(el("div", cls || "", v));
+  }
+  checkRow("根目录 Δ（实占）", signedBytes(check.root_delta_alloc));
+  if (check.skipped) {
+    checkRow("卷级校验", "跳过 · " + (check.message || ""));
+  } else {
+    checkRow("卷用量 Δ（实占）", signedBytes(check.disk_delta_alloc));
+    checkRow("偏差", fmtPct(check.diff_pct), check.ok ? "ok" : "danger");
+  }
+  checkRow("不可读目录", fmtCount(check.unknown_dirs_after) + " 个（unknown 向祖先传播）");
+  checkRow("覆盖率", to.coverage_pct > 0 ? fmtPct(to.coverage_pct) : "—");
+  checkRow("from 快照", "#" + D.from_snapshot.id + " · " + D.from_snapshot.kind + " · " + fmtPct(D.from_snapshot.coverage_pct));
+  checkRow("to 快照", "#" + to.id + " · " + to.kind + " · " + fmtPct(to.coverage_pct));
+  warnRoot.appendChild(table);
+  if (D.warnings && D.warnings.length) {
+    const ul = el("ul", "rows");
+    D.warnings.forEach((w) => {
+      const li = el("li", "row");
+      li.appendChild(el("div", "row-main", w));
+      ul.appendChild(li);
+    });
+    warnRoot.appendChild(ul);
+  } else {
+    warnRoot.appendChild(el("div", "empty", "没有警告"));
+  }
+
+  draw();
+})();
+</script>
+</body>
+</html>

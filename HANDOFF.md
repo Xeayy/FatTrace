@@ -1,7 +1,7 @@
 # FatTrace 项目交接文档
 
 - 更新时间：2026-10-28
-- 状态：**M0–M3 已完成并通过门禁；M4（静态周报）待开始**
+- 状态：**M0–M4 已完成并通过门禁；M5（本地只读 UI）待开始**
 - 项目根目录：`D:\FatTraceDemo\FatTrace`
 
 ## 0. 项目一句话
@@ -36,16 +36,21 @@ cd /d/FatTraceDemo/FatTraceDemo/FatTrace
 FatTrace/
   go.mod                        module fattrace, go 1.27.0（modernc.org/sqlite v1.61.0）
   .gitignore
-  cmd/fat/main.go               CLI 入口：scan / snap / fileid / db / status / version
+  cmd/fat/main.go               CLI 入口：scan / snap / diff / report / fileid / db / status / version
   cmd/fat/db.go                 CLI: db init / status
   cmd/fat/snap.go               CLI: snap（进度、Ctrl+C/Ctrl+Break、JSON）
-  cmd/fat/diff.go               CLI: diff（配对、--week、Top-N、表格/JSON）
+  cmd/fat/diff.go               CLI: diff（配对、--week、Top-N、表格/JSON，只读连接）
+  cmd/fat/report.go             CLI: report（单文件 HTML，只读连接）
   internal/model/model.go       FileRecord / ScanError / ScanStats
   internal/model/diff.go        DiffResult / FileChange / DirChange / FileCandidate
   internal/diff/diff.go         纯函数引擎：FRN join、分类、move 归属、Top-N
   internal/diff/service.go      快照配对、流式加载、卷级校验、覆盖率警告
   internal/diff/diff_test.go    14 个黄金用例
   internal/diff/service_test.go 4 个服务层/卷级校验测试
+  internal/report/report.go     周报数据、treemap 自有增量、单文件渲染
+  internal/report/service.go    diff.Run + 快照错误 → HTML
+  internal/report/template.html 内嵌模板：CSS + Canvas squarified treemap + 列表
+  internal/report/report_test.go 3 个报告测试
   internal/scan/ntquery.go      NT API、结构体、卷空间、FileID、VolumeMetadata
   internal/scan/scan.go         递归遍历、IncludeDirs、reparse 跳过、硬链接去重、覆盖率
   internal/scan/scan_test.go    8 个扫描器测试
@@ -59,13 +64,14 @@ FatTrace/
   internal/store/staging.go     scan_files 流式写入（硬链接去重）
   internal/store/aggregate.go   目录自底向上聚合 + unknown 传播
   internal/store/snapshot.go    快照生命周期与原子切换
-  internal/store/snapshot_read.go 快照读取、流式扫描、配对查询、跨卷候选
-  internal/store/store_test.go / snapshot_test.go  共 17 个 store 测试
+  internal/store/snapshot_read.go 快照读取、流式扫描、配对查询、跨卷候选、按快照取错误
+  internal/store/store_test.go / snapshot_test.go  共 18 个 store 测试
   fat.exe                       本地构建产物（被 .gitignore 忽略）
   docs/m0-results.md            M0 实测记录
   docs/m1-results.md            M1 实测记录
   docs/m2-results.md            M2 实测记录
   docs/m3-results.md            M3 实测记录
+  docs/m4-results.md            M4 实测记录
 ```
 
 ### 已实现能力
@@ -109,6 +115,16 @@ FatTrace/
 - 流式：from 侧 `LoadSnapshotFileIndex`，to 侧 `StreamSnapshotFiles` + `computer` 累加器；46 万×2 峰值 **258.3 MB**（初版 416.4 MB），2.16s。
 - 实测 #2→#3：4 新增 / 2 删除 / 3 变大，净 +137.76 MiB，卷级差 0.00% OK；最大项是 FatTrace 自身 DB 增长。细节见 `docs/m3-results.md`。
 
+### M4 已实现（静态周报）
+
+- `fat report`：单文件 HTML（`template.html` 经 `//go:embed`），数据 JSON 内联，无外部请求；28.6 KiB / 1.84s / 峰值 261.6 MB。
+- treemap：Canvas squarified，无第三方库；面积 = 目录**自有增量**（按最近上榜祖先扣减，父子上榜不重复），大块居中标签、小块左上标签、悬停明细；`UnknownAfter` 目录斜纹。
+- 页面：覆盖率横幅、卷级校验、“谁胖了”treemap、6 张 KPI、文件/目录增长与缩小、move/rename、扫描错误摘要、校验与警告；空状态与子目录 skipped 均正常。
+- 数据与 CLI 同源：报告先跑 `diff.Run`，模板不重算；扫描错误取 `last_snapshot_id = to 快照` 的聚合行。
+- `fat diff` / `fat report` 的 CLI 均改用 `OpenReader`，扫描持写锁时也能运行。
+- 安全：JSON 默认 HTML 转义（`</script>` 无法逃逸），DOM 全部 `textContent`；测试覆盖恶意文件名。
+- 实测 #2→#3：+137.76 MiB，treemap 块面积和精确等于净增长，错误摘要 3 条；headless Chrome 离线截图验证。细节见 `docs/m4-results.md`。
+
 ### 当前 CLI
 
 ```bash
@@ -125,6 +141,9 @@ FatTrace/
 ./fat.exe diff --from 2 --to 3
 ./fat.exe diff --volume D: --json
 ./fat.exe diff --cross-volume          # 标注疑似跨卷移入
+./fat.exe report                       # 生成 fattrace-report.html
+./fat.exe report --week --top 20 --out week.html
+./fat.exe report --from 2 --to 3 --out report.html
 ./fat.exe fileid "D:/some/file.bin"
 ./fat.exe db init
 ./fat.exe db init --db "D:/tmp/test.db"
@@ -159,7 +178,7 @@ FatTrace/
 - 非目标：自动清理、实时防护、网络盘 / 非 NTFS。
 - 产品原则：建议不等于执行；删除永远由用户操作。
 
-## 5. M2 已完成与 M3 计划
+## 5. 里程碑定案与 M5 计划
 
 ### M2 定案（开工前三问的答案）
 
@@ -180,26 +199,36 @@ FatTrace/
 - **默认配对**：`RecentComplete(50)` → 第一个 `isVolumeRoot` 的 complete 作为 to，`PreviousComplete` 同卷同根作为 from；子目录快照与全卷快照不可配对。
 - **流式**：from 索引 + to 流式累加；46 万×2 峰值 258.3 MB（初版 416.4 MB），2.16s。
 
-### M4：静态周报（下一步）
+### M4 定案（已实现）
 
-目标：内嵌 JSON 的单文件 HTML 周报：Top Movers、treemap、unknown 斜纹、覆盖率横幅、错误摘要。产出离线可打开的周报文件，数据与 `fat diff --json` 同源。
+- **只消费 DiffResult**：报告数值、`fat diff` 表格、`--json` 三处同源；模板不做统计。
+- **时间窗口跟随快照**：报告头部显示实际 from/to 与跨度；`--week` 只做跨度警告。
+- **treemap 面积口径**：目录自有 `DeltaAlloc`（谁胖了），而非 `TotalAlloc`（现在多大）。
+- **treemap 去重**：TopDirs 的 Δ 是递归值，按“最近上榜祖先”扣减后只画自有增量；正余量才加“其他目录”。
+- **unknown 斜纹**：只标注上榜增长目录的 `UnknownAfter`，配图例；不改变面积。
+- **内嵌数据**：Top-N 列表 + treemap 数据直接内联，不嵌整棵目录树；28 KiB 量级。
+- **单文件安全**：JSON 标记替换 + `encoding/json` HTML 转义；DOM 只用 `textContent`。
 
-门禁：离线打开 2 秒内回答“谁胖了”；周报数值与 CLI 逐项一致。
+### M5：本地只读 UI（下一步）
+
+目标：只读 API + 内嵌 SPA：总览、目录下钻、两周对比、时间轴、7 周 sparkline、规则/设置、状态页；Canvas 逐层渲染，不一次画全卷。
+
+门禁：10 万节点交互可用；API P95 < 200ms；仅监听 `127.0.0.1` + 每会话 token。
 
 建议步骤：
 
-1. `internal/report`：定义周报数据（复用 `model.DiffResult` + 两次快照元数据），CLI 增加 `fat report --from/--to --out week.html`（或 `fat diff --html`）。
-2. 单文件模板：`embed` HTML/CSS/JS，JSON 内联，无任何外部请求；Canvas 逐层渲染 treemap，不一次画全卷。
-3. 关键区块：Top Movers（文件/目录）、目录 Δ treemap、unknown 斜纹与图例、覆盖率横幅、扫描错误摘要、volume check。
-4. 一致性：周报只消费 diff 结果，不在模板里重算统计。
-5. 验收：D: 真实快照出报，离线打开首屏 < 2s，数值与 `fat diff` 对照。
+1. `internal/server`：`net/http` 只读 API（`/api/status`、`/api/snapshots`、`/api/diff`、`/api/dir?frn=&snapshot=`、`/api/trend`），复用 store/diff 服务层，不引入 ORM。
+2. 静态 SPA：`embed` 资源、无外部 CDN；随机 token，仅回环监听；UI 不提权。
+3. 目录下钻按需加载子目录，Canvas 分层绘制 + 视口裁剪，10 万节点只渲染可见层。
+4. 两周对比与 7 周 sparkline 基于 `snap_dirs` 聚合，不加载文件级行。
+5. 验收：真实 D: 库；API P95 采样；UI 冒烟（总览/下钻/对比/时间轴/状态）。
 
-M4 开工前要定：
+M5 开工前要定：
 
-- 周报时间窗口：固定自然周 / 滚动 7 天 / 跟随快照跨度；
-- treemap 面积口径：目录 `DeltaAlloc`（谁胖了）还是 `TotalAlloc`（现在多大）；
-- unknown 目录的斜纹实现与图例；
-- 内嵌全部 Top-N 还是只嵌摘要 + 目录树。
+- API 暴露 FRN 还是路径（FRN 稳定，路径会变；跨快照需解析）；
+- SPA 构建方式（手写 ES 模块 vs 构建链，禁止 CDN）；
+- 目录下钻的分页/上限；
+- token 传递方式（header vs cookie）与 UI 不提权的边界。
 
 开发样本：`D:\FatTraceDemo\.cache\fattrace\fattrace.db` 已有 D: 的真实快照（#2/#3 全卷、#1/#6 子目录），可直接做 diff/周报联调；其中 #4 partial、#5 failed 用于异常路径。
 
@@ -234,6 +263,11 @@ M4 开工前要定：
 - 守恒校验是文件 Δ 与根目录 Δ 的**精确相等**；受保护目录变化、WAL/SHM 重建都会让它响，只做 warning 不阻断。
 - SQLite 的 `-shm`/`-wal` 关闭时删除、下次打开新建，FRN 随之变化，diff 中表现为 delete + add；这是快照自身的预期噪声。
 - 默认配对会跳过更新的子目录快照（只选 complete 卷根）；要对比子目录必须显式 `--from/--to`，且两端根必须一致。
+- `template.html` 是 `//go:embed` 的编译期资源：改模板后必须重新 `go build`，直接跑旧 `fat.exe` 不会看到变化。
+- treemap 不能直接拿 TopDirs 的 Δ 当面积：祖先目录的 Δ 已包含上榜后代（隔代也会重叠），必须按最近上榜祖先扣减后再画，否则块面积和会大于净增长。
+- 周报数据标记是 `"__FATTRACE_DATA__"`，替换前模板必须是合法 JSON；`encoding/json` 会把 `<>&` 转义，文件路径无法闭合 `</script>`。
+- `scan_errors` 是聚合表，`SnapshotErrors` 按 `last_snapshot_id` 归属；后一次扫描命中同一错误会把归属移到新快照，旧周报不再显示它。
+- `fat diff` / `fat report` 用 `OpenReader`：库必须已初始化（`fat db init` 或至少一次 `fat snap`），且只读连接不会自动迁移旧 schema。
 
 ## 7. 风险与安全提醒
 
@@ -246,7 +280,7 @@ M4 开工前要定：
 
 新对话可以直接发：
 
-> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`，从 M4 静态周报开始继续 FatTrace 项目。保持“所有工具/缓存都在工作区”的原则。
+> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`，从 M5 本地只读 UI 开始继续 FatTrace 项目。保持“所有工具/缓存都在工作区”的原则。
 
 接手后先跑：
 
@@ -258,6 +292,7 @@ export FATTRACE_HOME='D:\FatTraceDemo\.cache\fattrace'
 ./fat.exe status
 ./fat.exe snap --quiet --max-depth 2 "D:/FatTraceDemo"
 ./fat.exe diff --from 2 --to 3
+./fat.exe report --from 2 --to 3 --out 'D:\FatTraceDemo\.cache\fattrace\report-2-3.html'
 ```
 
-确认测试全绿、`fat diff` 能复现 `docs/m3-results.md` 的输出后，进入 M4。
+确认测试全绿、`fat diff`/`fat report` 能复现 `docs/m3-results.md`、`docs/m4-results.md` 的输出后，进入 M5。

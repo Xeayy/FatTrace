@@ -211,6 +211,42 @@ func (s *Store) LoadSnapshotFileIndex(ctx context.Context, snapshotID int64) (ma
 	return index, nil
 }
 
+// ScanErrorInfo is one aggregated scan error as recorded by the most recent
+// scan that hit it.
+type ScanErrorInfo struct {
+	Path       string `json:"path"`
+	Op         string `json:"op"`
+	Msg        string `json:"msg"`
+	Hits       int64  `json:"hits"`
+	LastSeenAt int64  `json:"last_seen_at_ms"`
+}
+
+// SnapshotErrors returns the errors whose last occurrence was the given
+// snapshot, most frequent first. Errors seen only by later scans are excluded.
+func (s *Store) SnapshotErrors(ctx context.Context, snapshotID int64, limit int) ([]ScanErrorInfo, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT path, op, msg, hits, last_seen_at FROM scan_errors
+		WHERE last_snapshot_id = ?
+		ORDER BY hits DESC, last_seen_at DESC, path
+		LIMIT ?`, snapshotID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ScanErrorInfo
+	for rows.Next() {
+		var e ScanErrorInfo
+		if err := rows.Scan(&e.Path, &e.Op, &e.Msg, &e.Hits, &e.LastSeenAt); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // LoadSnapshotDirs returns every directory row of a snapshot, ordered by FRN.
 func (s *Store) LoadSnapshotDirs(ctx context.Context, snapshotID int64) ([]model.SnapshotDir, error) {
 	var n int

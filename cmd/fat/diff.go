@@ -36,7 +36,7 @@ func diffCmd(args []string) {
 	if err != nil {
 		fail(err)
 	}
-	st, err := store.Open(path)
+	st, err := store.OpenReader(path)
 	if err != nil {
 		fail(err)
 	}
