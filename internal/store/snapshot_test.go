@@ -310,3 +310,56 @@ func TestCommitRequiresCompleteStatus(t *testing.T) {
 		t.Fatal("CommitSnapshot accepted a partial status")
 	}
 }
+
+func TestSnapshotErrorsBySnapshot(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	vol, err := s.EnsureVolume(ctx, 19, "NTFS", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	errs := []model.ScanError{{Path: `C:\secret`, FRN: 5, Op: "open", Msg: "access denied"}}
+	commit := func() int64 {
+		dirs := []model.FileRecord{{FRN: 1, ParentFRN: 0, Name: `C:\`, IsDir: true}}
+		commitStaged(t, s, vol, dirs)
+		agg, err := s.AggregateDirs(ctx, vol, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, err := s.BeginSnapshot(ctx, vol, "weekly", `C:\`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.CommitSnapshot(ctx, SnapshotCommit{
+			SnapshotID: id, VolumeID: vol, Status: "complete",
+			Stats: model.ScanStats{Dirs: 1, Errors: 1}, Dirs: agg, Errors: errs,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	first := commit()
+	got, err := s.SnapshotErrors(ctx, first, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Hits != 1 || got[0].Msg != "access denied" || got[0].Op != "open" {
+		t.Fatalf("first snapshot errors = %+v", got)
+	}
+
+	second := commit()
+	got, err = s.SnapshotErrors(ctx, first, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("errors attributed to the first snapshot after a later scan: %+v", got)
+	}
+	got, err = s.SnapshotErrors(ctx, second, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Hits != 2 {
+		t.Fatalf("second snapshot errors = %+v, want hits 2", got)
+	}
+}
