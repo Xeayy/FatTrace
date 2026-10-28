@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"fattrace/internal/diff"
+	"fattrace/internal/rules"
 	"fattrace/internal/store"
 )
 
@@ -24,10 +25,14 @@ type Options struct {
 // Run computes the diff, loads the errors that belong to the to-snapshot and
 // renders the single-file HTML report.
 func Run(ctx context.Context, st *store.Store, opts Options) ([]byte, error) {
-	res, err := diff.Run(ctx, st, diff.Options{
+	set, err := rules.Load(st.Path())
+	if err != nil {
+		return nil, err
+	}
+	res, err := rules.Diff(ctx, st, diff.Options{
 		FromID: opts.FromID, ToID: opts.ToID, RootPrefix: opts.RootPrefix,
 		TopN: opts.TopN, CrossVolume: opts.CrossVolume,
-	})
+	}, set)
 	if err != nil {
 		return nil, err
 	}

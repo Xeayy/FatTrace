@@ -546,7 +546,7 @@ function baseName(p) {
   return i < 0 ? clean : clean.slice(i + 1) || clean;
 }
 
-function kpiRow(totals, from, to, check) {
+function kpiRow(totals, from, to, check, ex) {
   const zone = el("div", "kpis");
   const add = (label, value, sub, cls) => {
     const card = el("div", "kpi");
@@ -575,6 +575,12 @@ function kpiRow(totals, from, to, check) {
   add("覆盖率", to.coverage_pct > 0 ? fmtPct(to.coverage_pct) : "—",
     check.unknown_dirs_after > 0 ? check.unknown_dirs_after + " 个目录不可读" : "无不可读目录",
     to.coverage_pct > 0 && to.coverage_pct < 95 ? "warn" : "");
+  if (ex) {
+    add("增长解释率", ex.growth_bytes > 0 ? fmtPct(ex.explained_pct) : "—",
+      fmtBytes(ex.explained_bytes) + " / " + fmtBytes(ex.growth_bytes) + " 已解释 · " +
+      ex.rules_loaded + " 条规则",
+      ex.growth_bytes > 0 && ex.explained_pct < 70 ? "warn" : "ok");
+  }
   return zone;
 }
 
@@ -595,6 +601,18 @@ function diffBanners(D) {
   if (D.warnings && D.warnings.length) {
     addBanner("warn", "数据质量警告 " + D.warnings.length + " 条", "详见下方“校验与警告”。");
   }
+  if (D.explanation && D.explanation.explained_pct < 70) {
+    addBanner("warn", "增长解释率 " + fmtPct(D.explanation.explained_pct),
+      "低于 70% 目标：" + fmtBytes(D.explanation.unexplained_bytes) + " 增长没有命中规则，主要是新文件类型或用户数据。");
+  }
+}
+
+function ruleBadge(rule) {
+  if (!rule) return null;
+  const b = el("span", "badge rule" + (rule.confidence === "low" ? " low" : ""),
+    rule.category_label || rule.category);
+  b.title = rule.name + " · " + rule.id + " · 置信度 " + rule.confidence;
+  return b;
 }
 
 function fileRows(items, mode) {
@@ -613,6 +631,8 @@ function fileRows(items, mode) {
       path = td(c.path || c.name, "path");
     }
     const pathCell = path instanceof Node && path.tagName === "TD" ? path : tdNode(path, "path");
+    const badge = ruleBadge(c.rule);
+    if (badge) pathCell.appendChild(badge);
     const size = c.kind === "deleted"
       ? td(fmtBytes(c.alloc_before), "num")
       : td(fmtBytes(c.alloc_before) + " → " + fmtBytes(c.alloc_after), "num");
@@ -625,10 +645,11 @@ function fileRows(items, mode) {
 function dirRows(items) {
   const rows = [];
   for (const d of items || []) {
-    const tag = el("span", "badge" + (d.unknown_after ? " unknown" : ""), d.unknown_after ? "含不可读" : "");
     const pathCell = el("td", "path");
     pathCell.appendChild(document.createTextNode(d.path || d.name));
-    if (d.unknown_after) pathCell.appendChild(tag);
+    if (d.unknown_after) pathCell.appendChild(el("span", "badge unknown", "含不可读"));
+    const badge = ruleBadge(d.rule);
+    if (badge) pathCell.appendChild(badge);
     rows.push([
       td(signedBytes(d.delta_alloc), "num " + signClass(d.delta_alloc)),
       pathCell,
@@ -659,6 +680,62 @@ function checkPanel(D) {
   return p;
 }
 
+function explainPanel(ex) {
+  const p = panel("增长解释", "按规则归类“新增 + 变大”的实占增长；规则只做标注，不会删除任何文件");
+  if (!ex) {
+    p.appendChild(el("div", "empty", "本次对比没有解释数据。"));
+    return p;
+  }
+  p.appendChild(el("div", "notice",
+    "已解释 " + fmtBytes(ex.explained_bytes) + " / " + fmtBytes(ex.growth_bytes) +
+    "（" + (ex.growth_bytes > 0 ? fmtPct(ex.explained_pct) : "—") + "）· 未解释 " +
+    fmtCount(ex.unexplained_total) + " 个文件 · " + fmtCount(ex.rules_loaded) + " 条规则"));
+
+  const grid = el("div", "explain-grid");
+  const left = el("div");
+  left.appendChild(el("div", "subhead", "已解释增长 · 按类别"));
+  if (!(ex.categories || []).length) {
+    left.appendChild(el("div", "empty", "没有命中的增长"));
+  } else {
+    const max = Math.max(...ex.categories.map((c) => c.bytes));
+    for (const c of ex.categories) {
+      const row = el("div", "cat-row");
+      const head = el("div", "cat-head");
+      head.appendChild(el("span", "cat-name", c.label));
+      head.appendChild(el("span", "cat-meta", fmtCount(c.files) + " 文件"));
+      row.appendChild(head);
+      row.appendChild(el("div", "cat-bytes", fmtBytes(c.bytes)));
+      const bar = el("div", "cat-bar");
+      const fill = el("i");
+      fill.style.width = (max > 0 ? Math.max(2, Math.round(c.bytes / max * 100)) : 0) + "%";
+      bar.appendChild(fill);
+      row.appendChild(bar);
+      left.appendChild(row);
+    }
+  }
+  grid.appendChild(left);
+
+  const right = el("div");
+  right.appendChild(el("div", "subhead", "未解释增长 · Top" +
+    (ex.unexplained_total > (ex.unexplained || []).length
+      ? "（显示前 " + (ex.unexplained || []).length + " / " + fmtCount(ex.unexplained_total) + "）"
+      : "")));
+  if (!(ex.unexplained || []).length) {
+    right.appendChild(el("div", "empty", "全部增长都命中了规则"));
+  } else {
+    right.appendChild(dataTable(
+      [{ label: "路径" }, { label: "类型" }, { label: "实占 Δ", num: true }],
+      ex.unexplained.map((u) => [
+        td(u.path, "path"),
+        td(u.kind === "added" ? "新增" : "变大", "dim"),
+        td(signedBytes(u.delta_alloc), "num pos"),
+      ])));
+  }
+  grid.appendChild(right);
+  p.appendChild(grid);
+  return p;
+}
+
 function renderDiff(container, D) {
   diffBanners(D);
   const head = el("div", "page-head");
@@ -675,7 +752,7 @@ function renderDiff(container, D) {
   head.appendChild(meta);
   container.appendChild(head);
 
-  container.appendChild(kpiRow(D.totals, D.from_snapshot, D.to_snapshot, D.volume_check));
+  container.appendChild(kpiRow(D.totals, D.from_snapshot, D.to_snapshot, D.volume_check, D.explanation));
 
   // treemap of intrinsic directory growth
   const p = panel("目录增长 treemap", "面积 = 目录自身实占增长，已扣减上榜子目录的增量；点击色块可下钻");
@@ -703,6 +780,8 @@ function renderDiff(container, D) {
       }
     },
   });
+
+  container.appendChild(explainPanel(D.explanation));
 
   const grid1 = el("div", "grid-2");
   const pg = panel("文件增长 Top", fmtCount((D.top_growth || []).length) + " 条");
@@ -1022,8 +1101,45 @@ async function viewTimeline(root) {
   root.appendChild(p);
 }
 
-function viewRules(root) {
-  const p = panel("规则与设置", "当前只读，M6 起提供编辑");
+async function viewRules(root) {
+  const data = await api("rules");
+  const rules = data.rules || [];
+  const p = panel("解释规则",
+    fmtCount(rules.length) + " 条（内置 " + fmtCount(data.rules_builtin) +
+    " · 用户 " + fmtCount(data.rules_user) + "）");
+  p.appendChild(el("div", "notice",
+    "规则只给增长贴标签，不执行删除或清理。用户规则放在数据库同目录的 rules.yaml，" +
+    "同 ID 覆盖内置规则，重启 fat serve 后生效。"));
+  if (data.user_path) {
+    p.appendChild(el("div", "notice", "已加载用户规则：" + data.user_path));
+  }
+  const confLabel = { high: "高", medium: "中", low: "低" };
+  const rows = rules.slice().sort((a, b) => {
+    const ca = a.category_label || a.category, cb = b.category_label || b.category;
+    return ca === cb ? a.id.localeCompare(b.id) : ca.localeCompare(cb);
+  }).map((r) => {
+    const patterns = el("div", "rule-patterns");
+    for (const g of r.match.path_globs || []) patterns.appendChild(el("div", null, g));
+    for (const g of r.match.name_globs || []) patterns.appendChild(el("div", null, "name: " + g));
+    const nameCell = el("td", "path");
+    nameCell.appendChild(el("div", null, r.name));
+    nameCell.appendChild(el("div", "dim", r.id));
+    return [
+      td(r.category_label || r.category),
+      nameCell,
+      td(confLabel[r.confidence] || r.confidence, r.confidence === "low" ? "warn" : ""),
+      td(r.source === "user" ? "用户" : "内置", r.source === "user" ? "pos" : "dim"),
+      tdNode(patterns, "path"),
+    ];
+  });
+  const wrap = el("div", "rules-table-wrap");
+  wrap.appendChild(dataTable(
+    [{ label: "类别" }, { label: "规则" }, { label: "置信度" }, { label: "来源" }, { label: "匹配" }],
+    rows));
+  p.appendChild(wrap);
+  root.appendChild(p);
+
+  const policy = panel("口径与边界");
   const box = el("div", "rules");
   const section = (title, text, list) => {
     box.appendChild(el("h3", null, title));
@@ -1035,6 +1151,12 @@ function viewRules(root) {
     }
   };
   section("只读边界", "本 UI 只展示数据，不提供删除、清理、执行建议或修改扫描配置的入口。所有处置动作由用户手动完成。");
+  section("解释率口径", null, [
+    "分母 = 新增 + 变大文件的实占增长；删除、缩小与 move 不计入。",
+    "按文件累计，父子目录不会重复计数；解释率保留两位小数。",
+    "最具体的匹配规则胜出（字面量更多者优先），用户规则与内置同分时用户优先。",
+    "未解释增长按 Δ 降序保留前 50 个文件，界面显示总数。",
+  ]);
   section("体积口径", null, [
     "分配大小（实占）为主口径，逻辑大小并存展示。",
     "硬链接按 FRN 去重；reparse point 不跟随。",
@@ -1052,9 +1174,9 @@ function viewRules(root) {
     "默认配对：最新 complete 卷根 + 同卷同根的上一个 complete。",
   ]);
   section("卷级校验", "|根 Δ − 卷 Δ| / max(|卷 Δ|, 1% × 已用) < 2% 记为通过；非卷根或缺卷用量时跳过，不算失败。");
-  section("保留策略（计划）", "目录聚合保留 52 周、每日汇总 90 天、Top 事件 8 周；告警阈值与静默窗口将在 M6 提供配置界面。");
-  p.appendChild(box);
-  root.appendChild(p);
+  section("保留策略（计划）", "目录聚合保留 52 周、每日汇总 90 天、Top 事件 8 周；告警阈值与静默窗口在后续里程碑提供配置。");
+  policy.appendChild(box);
+  root.appendChild(policy);
 }
 
 async function viewStatus(root) {

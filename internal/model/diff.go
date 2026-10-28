@@ -24,6 +24,46 @@ type SnapshotDir struct {
 	Unknown         bool
 }
 
+// RuleRef is the explanation rule that matched a change. Rules annotate only;
+// they never change sizes or deltas.
+type RuleRef struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Category      string `json:"category"`
+	CategoryLabel string `json:"category_label,omitempty"`
+	Confidence    string `json:"confidence"`
+}
+
+// ExplainedCategory aggregates observed positive growth by rule category.
+type ExplainedCategory struct {
+	Category string `json:"category"`
+	Label    string `json:"label"`
+	Bytes    int64  `json:"bytes"`
+	Files    int64  `json:"files"`
+}
+
+// UnexplainedItem is one growing file that no rule matched.
+type UnexplainedItem struct {
+	Path       string     `json:"path"`
+	Kind       ChangeKind `json:"kind"`
+	DeltaAlloc int64      `json:"delta_alloc"`
+}
+
+// Explanation summarizes rule coverage over observed file growth. GrowthBytes
+// counts added + grown files only: moves and deletions do not increase the
+// volume, so they are outside the denominator.
+type Explanation struct {
+	RulesLoaded      int                 `json:"rules_loaded"`
+	GrowthBytes      int64               `json:"growth_bytes"`
+	ExplainedBytes   int64               `json:"explained_bytes"`
+	UnexplainedBytes int64               `json:"unexplained_bytes"`
+	ExplainedPct     float64             `json:"explained_pct"`
+	NetGrowthBytes   int64               `json:"net_growth_bytes"`
+	Categories       []ExplainedCategory `json:"categories,omitempty"`
+	Unexplained      []UnexplainedItem   `json:"unexplained,omitempty"`
+	UnexplainedTotal int                 `json:"unexplained_total"`
+}
+
 // FileChange describes a single file-level difference. DeltaBytes/DeltaAlloc
 // are signed; alloc is the primary accounting unit (compression, sparse files).
 type FileChange struct {
@@ -44,6 +84,7 @@ type FileChange struct {
 	MTimeBeforeMS       int64      `json:"mtime_before_ms,omitempty"`
 	MTimeAfterMS        int64      `json:"mtime_after_ms,omitempty"`
 	SuspectedFromVolume uint32     `json:"suspected_from_volume,omitempty"`
+	Rule                *RuleRef   `json:"rule,omitempty"`
 }
 
 // DirChange describes one directory difference. DeltaAlloc is the move-adjusted
@@ -70,6 +111,7 @@ type DirChange struct {
 	UnknownBefore    bool       `json:"unknown_before,omitempty"`
 	UnknownAfter     bool       `json:"unknown_after,omitempty"`
 	NewlyUnknown     bool       `json:"newly_unknown,omitempty"`
+	Rule             *RuleRef   `json:"rule,omitempty"`
 }
 
 // FileCandidate identifies a file by name, size and mtime on another volume.
@@ -147,5 +189,6 @@ type DiffResult struct {
 	ShrunkDirs   []DirChange  `json:"top_shrunk_dirs,omitempty"`
 	DirMoves     []DirChange  `json:"dir_moves,omitempty"`
 	Check        VolumeCheck  `json:"volume_check"`
+	Explanation  *Explanation `json:"explanation,omitempty"`
 	Warnings     []string     `json:"warnings,omitempty"`
 }

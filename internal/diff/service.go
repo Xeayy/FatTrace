@@ -21,6 +21,10 @@ type Options struct {
 	RootPrefix  string
 	TopN        int
 	CrossVolume bool
+	// OnFileChange, if set, receives every file change with its display path
+	// resolved, before top-N truncation. It runs after the store stream ends and
+	// must not query the store.
+	OnFileChange func(model.FileChange)
 }
 
 // Run loads a snapshot pair, computes the diff and fills in snapshot metadata
@@ -62,7 +66,10 @@ func Run(ctx context.Context, st *store.Store, opts Options) (model.DiffResult, 
 	if err := st.StreamSnapshotFiles(ctx, to.ID, c.addFile); err != nil {
 		return model.DiffResult{}, fmt.Errorf("load snapshot #%d files: %w", to.ID, err)
 	}
-	res := c.finish(Input{FromDirs: fromDirs, ToDirs: toDirs, TopN: opts.TopN})
+	res := c.finish(Input{
+		FromDirs: fromDirs, ToDirs: toDirs, TopN: opts.TopN,
+		OnFileChange: opts.OnFileChange,
+	})
 	res.VolumeID = to.VolumeID
 	res.Root = to.Root
 	res.FromSnapshot = snapshotRef(from)

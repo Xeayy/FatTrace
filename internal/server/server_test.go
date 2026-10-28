@@ -247,6 +247,9 @@ func TestAPIDiffMatchesService(t *testing.T) {
 	if got.Check.RootDeltaAlloc != want.Check.RootDeltaAlloc || got.Check.OK != want.Check.OK {
 		t.Fatalf("check = %+v, want %+v", got.Check, want.Check)
 	}
+	if got.Explanation == nil || got.Explanation.GrowthBytes != 2000 || got.Explanation.UnexplainedTotal != 1 {
+		t.Fatalf("explanation = %+v", got.Explanation)
+	}
 
 	// A second call is served from the cache and must be byte-for-byte stable.
 	var again model.DiffResult
@@ -265,6 +268,50 @@ func TestAPIDiffMatchesService(t *testing.T) {
 	}
 	if code := doGet(t, f, "/api/diff?top=abc", testToken, &e); code != http.StatusBadRequest {
 		t.Fatalf("bad top = %d, want 400", code)
+	}
+}
+
+func TestAPIRulesAndExplanation(t *testing.T) {
+	f := newFixture(t)
+
+	var set struct {
+		Rules []struct {
+			ID string `json:"id"`
+		} `json:"rules"`
+		RulesBuiltin int    `json:"rules_builtin"`
+		UserPath     string `json:"user_path"`
+	}
+	if code := doGet(t, f, "/api/rules", testToken, &set); code != http.StatusOK {
+		t.Fatalf("rules = %d", code)
+	}
+	if set.RulesBuiltin < 60 || len(set.Rules) != set.RulesBuiltin || set.UserPath != "" {
+		t.Fatalf("rules payload = %d builtin, %d total, user %q", set.RulesBuiltin, len(set.Rules), set.UserPath)
+	}
+
+	base := []model.FileRecord{
+		{FRN: 1, ParentFRN: 0, Name: `D:\`, IsDir: true},
+		{FRN: 2, ParentFRN: 1, Name: "sub", IsDir: true},
+		{FRN: 10, ParentFRN: 1, Name: "keep.bin", Size: 100, AllocSize: 1000},
+	}
+	from := seedSnapshot(t, f.store, f.vol, `D:\`, "complete", 200_000, base)
+	withLog := append(append([]model.FileRecord{}, base...),
+		model.FileRecord{FRN: 14, ParentFRN: 2, Name: "setup.log", Size: 512, AllocSize: 4096})
+	to := seedSnapshot(t, f.store, f.vol, `D:\`, "complete", 204_000, withLog)
+
+	var res model.DiffResult
+	if code := doGet(t, f, "/api/diff?from="+itoa(from)+"&to="+itoa(to), testToken, &res); code != http.StatusOK {
+		t.Fatalf("diff = %d", code)
+	}
+	ex := res.Explanation
+	if ex == nil || ex.GrowthBytes != 4096 || ex.ExplainedBytes != 4096 ||
+		ex.UnexplainedBytes != 0 || ex.ExplainedPct != 100 || ex.UnexplainedTotal != 0 {
+		t.Fatalf("explanation = %+v", ex)
+	}
+	if len(ex.Categories) != 1 || ex.Categories[0].Category != "logs" || ex.Categories[0].Bytes != 4096 {
+		t.Fatalf("categories = %+v", ex.Categories)
+	}
+	if len(res.TopGrowth) != 1 || res.TopGrowth[0].Rule == nil || res.TopGrowth[0].Rule.ID != "logs.files" {
+		t.Fatalf("top growth rule = %+v", res.TopGrowth)
 	}
 }
 

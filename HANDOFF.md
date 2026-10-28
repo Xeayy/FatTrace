@@ -1,7 +1,7 @@
 # FatTrace 项目交接文档
 
 - 更新时间：2026-10-28
-- 状态：**M0–M5 已完成并通过门禁；M6（解释层）待开始**
+- 状态：**M0–M6 已完成并通过门禁；M7（调度、保留与告警）待开始**
 - 项目根目录：`D:\FatTraceDemo\FatTrace`
 
 ## 0. 项目一句话
@@ -39,18 +39,23 @@ FatTrace/
   cmd/fat/main.go               CLI 入口：scan / snap / diff / report / serve / fileid / db / status / version
   cmd/fat/db.go                 CLI: db init / status
   cmd/fat/snap.go               CLI: snap（进度、Ctrl+C/Ctrl+Break、JSON）
-  cmd/fat/diff.go               CLI: diff（配对、--week、Top-N、表格/JSON，只读连接）
-  cmd/fat/report.go             CLI: report（单文件 HTML，只读连接）
+  cmd/fat/diff.go               CLI: diff（配对、--week、Top-N、解释层、表格/JSON，只读连接）
+  cmd/fat/report.go             CLI: report（单文件 HTML + 解释面板，只读连接）
   cmd/fat/serve.go              CLI: serve（回环监听、每会话 token、打印 #t= URL）
   internal/model/model.go       FileRecord / ScanError / ScanStats
-  internal/model/diff.go        DiffResult / FileChange / DirChange / FileCandidate
-  internal/diff/diff.go         纯函数引擎：FRN join、分类、move 归属、Top-N
+  internal/model/diff.go        DiffResult / FileChange / DirChange / FileCandidate / Explanation / RuleRef
+  internal/diff/diff.go         纯函数引擎：FRN join、分类、move 归属、Top-N、OnFileChange 观察者
   internal/diff/service.go      快照配对、流式加载、卷级校验、覆盖率警告
   internal/diff/diff_test.go    14 个黄金用例
   internal/diff/service_test.go 4 个服务层/卷级校验测试
-  internal/report/report.go     周报数据、treemap 自有增量、单文件渲染
-  internal/report/service.go    diff.Run + 快照错误 → HTML
-  internal/report/template.html 内嵌模板：CSS + Canvas squarified treemap + 列表
+  internal/diff/observer_test.go 观察者全量路径 + Top-N 截断测试
+  internal/rules/rules.go       YAML 规则加载/校验/合并、通配符匹配、特异性
+  internal/rules/apply.go       rules.Diff：观察者聚合解释率、未解释榜单、榜单规则标注
+  internal/rules/builtin.yaml   内嵌 69 条规则、18 个类别
+  internal/rules/rules_test.go  7 个规则/聚合/标注测试
+  internal/report/report.go     周报数据、treemap 自有增量、Explanation、单文件渲染
+  internal/report/service.go    rules.Diff + 快照错误 → HTML
+  internal/report/template.html 内嵌模板：CSS + Canvas squarified treemap + 解释面板 + 列表
   internal/report/report_test.go 3 个报告测试
   internal/scan/ntquery.go      NT API、结构体、卷空间、FileID、VolumeMetadata
   internal/scan/scan.go         递归遍历、IncludeDirs、reparse 跳过、硬链接去重、覆盖率
@@ -68,12 +73,12 @@ FatTrace/
   internal/store/snapshot_read.go 快照读取、流式扫描、配对查询、跨卷候选、按快照取错误
   internal/store/browse.go      目录下钻（FRN/面包屑/单层子项）与卷根趋势
   internal/store/store_test.go / snapshot_test.go / browse_test.go  共 21 个 store 测试
-  internal/server/server.go     只读 server：embed、路由、token 鉴权、安全头、优雅退出
-  internal/server/api.go        /api/status|snapshots|diff|dir|trend + diff 结果缓存
-  internal/server/server_test.go API 鉴权/口径/缓存/错误映射测试
+  internal/server/server.go     只读 server：embed、路由、token 鉴权、安全头、规则集加载
+  internal/server/api.go        /api/status|snapshots|diff|rules|dir|trend + diff 结果缓存
+  internal/server/server_test.go API 鉴权/口径/缓存/错误映射/规则与解释测试
   internal/server/latency_test.go 真实库 P95 门禁（需 FATTRACE_DB）
   internal/server/web/index.html SPA 外壳与导航
-  internal/server/web/app.js    原生 ES module：路由、treemap、sparkline、六个视图
+  internal/server/web/app.js    原生 ES module：路由、treemap、sparkline、解释面板、六视图
   internal/server/web/app.css   深色只读主题
   fat.exe                       本地构建产物（被 .gitignore 忽略）
   docs/m0-results.md            M0 实测记录
@@ -82,6 +87,7 @@ FatTrace/
   docs/m3-results.md            M3 实测记录
   docs/m4-results.md            M4 实测记录
   docs/m5-results.md            M5 实测记录
+  docs/m6-results.md            M6 实测记录（规则引擎、93.63% 解释率样本）
 ```
 
 ### 已实现能力
@@ -141,10 +147,20 @@ FatTrace/
 - API：`/api/status`、`/api/snapshots`、`/api/diff`、`/api/dir?snapshot=&frn=&dirs=&files=`、`/api/trend?volume=&limit=`；diff 复用 `diff.Run`，与 CLI/周报同源。
 - 安全：每会话 128-bit token，`X-FatTrace-Token` 常量时间比较；token 只出现在启动 URL 的 `#t=` 片段，SPA 转存 sessionStorage 后 `history.replaceState` 清除；CSP `default-src 'none'` + 自资源白名单，`no-store`、`nosniff`、`no-referrer`；无写接口，非 GET 405。
 - 下钻：`(snapshot_id, frn)` 定位，`frn=0` 解析卷根；单层最多 500 目录/200 文件并带截断标志；面包屑由递归 CTE 生成（`hop < 256`），路径仅展示。
-- SPA：原生 ES module，无构建链/CDN/内联脚本；六个视图——总览、目录下钻、两周对比、时间轴（sparkline + 快照表）、规则与设置（只读说明）、状态。
+- SPA：原生 ES module，无构建链/CDN/内联脚本；六个视图——总览、目录下钻、两周对比、时间轴（sparkline + 快照表）、规则与设置（M6 起显示已加载规则）、状态。
 - Canvas：squarified treemap，DPR/resize、单层绘制、悬停 tooltip、点击下钻、unknown 斜纹；10 万+ 节点靠逐层按需加载。
 - diff 缓存：键含 `{from,to,topN,cross,latestSnapshotID}`，锁内计算、上限 8 条；冷 diff 1.7 s → 热 1 ms。
 - 实测（D: 46 万文件）：P95 status 85 ms、dir-root 114 ms、dir-deep 119 ms、trend 1 ms、diff-warm 1 ms，全部 < 200 ms；六视图 headless Chrome 冒烟通过。细节见 `docs/m5-results.md`。
+
+### M6 已实现（解释层）
+
+- `internal/rules`：`builtin.yaml` 内嵌 **69 条规则 / 18 类**（toolchain 9、package 9、system 8、app-cache 8、logs 5、browser 5、crash 4、security 3、dev 3、temp 2、images 2、games 2、container 2、backup 2、app-data 2、user-content 1、recycle 1、database 1）。
+- 匹配语义：整段路径 glob（`*`/`?` 段内、`**` 跨段），大小写不敏感、统一反斜杠；`path_globs` 与 `name_globs` 同时存在必须同时命中；**字面量最多者胜**，同分用户规则优先。规则只标注，不改 Δ。
+- 用户规则：`<db_dir>/rules.yaml`（`version: 1`），同 ID 覆盖内置；缺失不报错，语法/未知字段/非法 confidence 直接失败。进程内只加载一次，改后重启。
+- 解释率：分母 = 新增 + 变大文件的 `DeltaAlloc`；删除/缩小/move 不计；文件级累计不重复；未解释按 Δ 降序保留 50 个 + 总数；`net_growth_bytes` 单独展示净 Δ。
+- 全量覆盖：diff 新增 `OnFileChange` 观察者，在路径解析后、Top-N 截断前逐条回调；未设置观察者时行为与 M3 完全一致。
+- 接入：`fat diff` 输出解释率/类别/未解释 Top 10 与榜单标签；`fat report` 增加解释率 KPI、<70% 横幅、类别条形图、未解释 Top 50 与行内规则标签；`fat serve` 的 `/api/diff` 带 `explanation`，新增 `GET /api/rules`，SPA 总览/对比显示解释面板、规则页显示 69 条真实规则。
+- 实测：工作区 `#7 → #8`（真实 `go get`/build/日志/用户文件增长）观测增长 62.80 MiB，已解释 58.80 MiB，**93.63%**，未解释 4.00 MiB（用户二进制与源码）；D: `#2 → #3` 137.81 MiB 观测增长解释率四舍五入 100.00%（未解释 760 B），但样本几乎全是 FatTrace 自身 DB，仅作卷根路径补充。细节见 `docs/m6-results.md`。
 
 ### 当前 CLI
 
@@ -162,9 +178,10 @@ FatTrace/
 ./fat.exe diff --from 2 --to 3
 ./fat.exe diff --volume D: --json
 ./fat.exe diff --cross-volume          # 标注疑似跨卷移入
-./fat.exe report                       # 生成 fattrace-report.html
+./fat.exe diff --from 7 --to 8         # 输出解释率、类别、未解释 Top 10（规则自动加载）
+./fat.exe report                       # 生成 fattrace-report.html（含解释面板）
 ./fat.exe report --week --top 20 --out week.html
-./fat.exe report --from 2 --to 3 --out report.html
+./fat.exe report --from 7 --to 8 --out report.html
 ./fat.exe serve                        # 默认库、随机回环端口，打印带 token 的 URL
 ./fat.exe serve --db 'D:\...\fattrace.db' --addr 127.0.0.1:8765
 ./fat.exe serve --top 50               # 调整 diff 榜单条数
@@ -201,8 +218,9 @@ FatTrace/
 - 批量写入约定：先清空目标键区间，再用普通 `INSERT` + 256 行多行 VALUES。
 - 非目标：自动清理、实时防护、网络盘 / 非 NTFS。
 - 产品原则：建议不等于执行；删除永远由用户操作。
+- 解释规则只贴标签、不改变 Δ、不触发任何动作；规则匹配纯内存，不查库。
 
-## 5. 里程碑定案与 M6 计划
+## 5. 里程碑定案与 M7 计划
 
 ### M2 定案（开工前三问的答案）
 
@@ -243,26 +261,37 @@ FatTrace/
 - **diff 缓存缓最终结果**：键含最新快照 ID，锁内计算防并发重复；不缓存 from 索引（会被消费）。
 - **UI 只读**：无写接口、无删除/清理入口；规则页只解释口径与保留计划。
 
-### M6：解释层（下一步）
+### M6 定案（已实现）
 
-目标：内置约 40 条规则（浏览器缓存、pip/npm/NuGet、WSL/Docker vhdx、WinSxS、VSS、Defender、Temp、CBS 日志等），YAML 可扩展；增长按规则归类，“unexplained” 单独排名。
+- **匹配优先级按字面量长度**：最具体路径胜出；同分用户规则优先，再按加载顺序。避免通用 `**\Cache\**` 抢走 Chrome/Go 专用规则。
+- **解释率按实占字节**：分母只含新增 + 变大的 `DeltaAlloc`；move/删除/缩小不计，父子目录不重复。净 Δ 单独展示，避免与解释率混淆。
+- **观察者保证全量**：`OnFileChange` 在 Top-N 截断前回调所有变更并带完整路径；解释率不受榜单长度影响，未启用时 diff 结果不变。
+- **规则只标注**：不改变文件/目录 Δ、不生成删除动作、不自动清理；产品原则“建议 ≠ 执行”在 M6 保持不变。
+- **用户规则 fail-loud**：`<db_dir>/rules.yaml` 缺失可接受，语法/未知字段/非法 confidence 直接报错，避免拼写错误静默退回内置规则。
+- **展示与数据同源**：CLI、周报、API、SPA 全部消费同一个 `model.Explanation`，报告模板不重算。
+- **验收口径**：主证据用工作区真实开发增长（93.63%），D: 卷根样本仅作补充；真实一周样本留到 M7 复核。
 
-门禁：真实一周数据中 ≥ 70% 增长被解释；建议只提示、绝不自动删除。
+### M7：调度、保留与告警（下一步）
+
+目标：日/周自动快照与保留策略落地；告警阈值与静默窗口；用真实一周数据复核解释率。
+
+门禁：真实一周日/周快照解释率 ≥ 70%；保留策略只清理 FatTrace 自身历史，不触碰用户文件；告警不重复轰炸、可静默。
 
 建议步骤：
 
-1. `internal/rules`：规则模型（匹配路径/文件名/进程线索、解释模板、置信度），内置 YAML 经 `embed` 打包，支持用户 YAML 覆盖。
-2. 把规则挂在 `DiffResult` 的目录/文件条目上（只加标注，不改 Δ），计算“已解释 / 未解释”占比与 unexplained 榜单。
-3. 周报与 SPA 展示解释列、占比横幅、unexplained 排名；规则页从静态说明升级为已加载规则列表。
-4. 验收：用 D: 真实快照（最好积累一周）跑 ≥ 70% 解释率；黄金用例覆盖“路径匹配”“歧义匹配”“不匹配”。
+1. 调度：Windows 计划任务安装/卸载（或 `fat daemon`），日扫 + 周全量；提权任务必须指向 `%ProgramFiles%` 且限制 ACL。
+2. 保留：目录聚合 52 周、`daily_summary` 90 天、Top 事件 8 周；清理仅限 FatTrace 库内历史行。
+3. 填充 `daily_summary` / `daily_top_dirs` / `alert_state`：日增量、Top 目录、阈值、静默窗口。
+4. 配置入口：阈值/静默窗口用本地配置文件 + CLI（server 保持只读，不新增写 API），SPA 只展示当前配置。
+5. 一周真实样本：复核解释率、未解释高频路径，必要时补规则或进程线索。
 
 开工前要定：
 
-- 规则匹配优先级与冲突处理（多规则命中取最具体路径）；
-- 解释率的分子分母（按字节还是按条目；建议按 Δ 字节）；
-- 用户规则文件放哪、如何避免误伤（只标注不删除）。
+- 调度器归属：Task Scheduler 还是常驻 `fat daemon`（锁、退出与错过补跑）。
+- 保留删除边界：只删库内历史，绝不删除被扫描文件。
+- 告警通道：周报横幅 / 本地通知 / 状态页，默认不弹窗。
 
-开发样本：`D:\FatTraceDemo\.cache\fattrace\fattrace.db` 已有 D: 的真实快照（#2/#3 全卷、#1/#6 子目录），可直接做 diff/周报联调；其中 #4 partial、#5 failed 用于异常路径。
+开发样本：`D:\FatTraceDemo\.cache\fattrace\fattrace.db` 现有 D: 卷根 #2/#3、工作区 #7/#8（M6 解释率样本），#4 partial、#5 failed 用于异常路径；#1/#6 为早期子目录快照。
 
 ## 6. 关键实现细节 / 坑
 
@@ -272,7 +301,7 @@ FatTrace/
 - 覆盖率用唯一**实占**字节；逻辑字节会被压缩/硬链接放大。
 - 非管理员 C: 覆盖率仅 78.73%，主要缺口是 WindowsApps、System Volume Information、pagefile 等；报告必须显示覆盖率与错误数。
 - 硬链接去重 map 在 86 万文件时峰值堆约 41 MiB；目标预算 300 MiB，仍有余量。
-- USN journal **不提供字节写入量**；churn 精确值需 ETW，M6/M7 再议，v1 用日增量近似。
+- USN journal **不提供字节写入量**；churn 精确值需 ETW，M7 再议，v1 用日增量近似。
 - 长路径统一经 `toLongPath` 加 `\\?\` 前缀；UNC 暂不支持。
 - `INSERT OR REPLACE` 既慢（实测 52k vs 140k rows/s）又掩盖重复键，批量写入一律「先 DELETE 再普通 INSERT」。
 - 多行 VALUES 的甜点是 256 行/语句（2048 个参数）；512 行反而略慢。
@@ -310,19 +339,34 @@ FatTrace/
 - API 错误映射：快照/目录不存在 → 404，参数非法或 diff 校验失败 → 400；不要在 404 时返回 500。
 - JSON 里 nil slice 要归一成 `[]`，否则前端拿到 `null` 直接 `forEach` 报错；`DirChild.Files` 不能 `omitempty`，空目录要显示 0。
 - `go test ./internal/server -run TestRealDBLatencyP95` 需要 `FATTRACE_DB`，且不要和 store 吞吐测试并行跑，I/O 争抢会让 P95/吞吐误报。
+- 规则 glob 是**按段**匹配：`*`/`?` 只在单段内生效，跨目录必须写 `**` 且 `**` 要单独成段；`[`、`]` 按字面字符处理，不要当字符类。
+- 路径匹配前统一小写、`/`→`\`、去掉尾斜杠，卷根 `D:\` 会规范成 `d:`；写规则时直接写 `**\AppData\...` 即可。
+- `path_globs` 与 `name_globs` 同时存在是 **AND**，不是 OR；只想按扩展名匹配就只写 `name_globs`。
+- 冲突按字面量字符数取最具体，不是按 YAML 顺序；加一条“更长的通配规则”可能抢走原本的专用规则，改规则后要看 `TestRuleSpecificity`。
+- 用户规则同分时才优先于内置；用户规则同 ID 是覆盖而非追加，合并顺序为用户在前、内置跳过同 ID。
+- 解释率分母只含 added + grown 的 `DeltaAlloc`；目录 move 与文件 move 不进分母，别拿它和净 Δ 做等值断言。
+- `OnFileChange` 运行在 diff 的流式回调里，回调内**不能再查 store**（唯一连接会死锁）；规则匹配必须保持纯内存。
+- 只有设置观察者时 diff 才会为**全部**变更补路径；这是解释率能覆盖 Top-N 之外的前提，也是无规则时不做多余路径计算的原因。
+- 解释汇总不能用 Top-N 榜单重算：榜单被截断且只含展示条目；`Explanation` 必须在观察者里累计。
+- `rules.yaml` 路径是 `filepath.Dir(dbPath)`；`fat diff`、`fat report`、`fat serve` 三处都加载同一文件，一处写错三处都会失败，这是有意的 fail-loud。
+- server 在 `New` 时加载规则，运行中修改 `rules.yaml` 不会热更新；重启后 diff 缓存自然重建。
+- `/api/rules` 只序列化 `Set` 的导出字段（规则、来源计数、用户路径），编译后的 glob 不对外；不要把 `compiled` 导出。
+- 周报/SPA 的解释横幅阈值是 70%，与 M6 门禁一致；低置信度规则标签用黄色提示，但仍计入已解释字节。
+- 测试样例里 `#7 → #8` 是工作区样本（解释率 93.63%），`#2 → #3` 是 D: 卷根样本（几乎全是自身 DB）；不要拿后者代表真实一周。
 
 ## 7. 风险与安全提醒
 
 - 计划任务提权时，二进制必须放 `%ProgramFiles%\FatTrace\` 并限制 ACL；配置/DB 放 `%LOCALAPPDATA%`，任务不能指向用户可写目录。
 - 本地 server 仅绑 `127.0.0.1`，随机端口 + 每会话 token；快照含全盘路径，不云同步。
 - 删除类建议只给路径与预期收益，不自动执行。
+- `rules.yaml` 只描述匹配与标签，不执行代码；读取时 `KnownFields(true)` + 严格校验，避免用户配置成为注入面。
 - 测试时不要扫描 `System Volume Information` 等受保护目录做写操作；只读可忽略错误。
 
 ## 8. 恢复对话提示
 
 新对话可以直接发：
 
-> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`，从 M6 解释层开始继续 FatTrace 项目。保持“所有工具/缓存都在工作区”的原则。
+> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`，从 M7 调度、保留与告警开始继续 FatTrace 项目。保持“所有工具/缓存都在工作区”的原则。
 
 接手后先跑：
 
@@ -332,9 +376,10 @@ cd /d/FatTraceDemo/FatTraceDemo/FatTrace
 go test ./... -count=1
 export FATTRACE_HOME='D:\FatTraceDemo\.cache\fattrace'
 ./fat.exe status
+./fat.exe diff --from 7 --to 8
 ./fat.exe diff --from 2 --to 3
-./fat.exe report --from 2 --to 3 --out 'D:\FatTraceDemo\.cache\fattrace\report-2-3.html'
+./fat.exe report --from 7 --to 8 --out 'D:\FatTraceDemo\.cache\fattrace\report-7-8.html'
 ./fat.exe serve --db 'D:\FatTraceDemo\.cache\fattrace\fattrace.db' --addr 127.0.0.1:0
 ```
 
-确认测试全绿、`fat diff`/`fat report`/`fat serve` 能复现 `docs/m3-results.md`、`docs/m4-results.md`、`docs/m5-results.md` 的输出后，进入 M6。
+确认测试全绿、`fat diff`/`fat report`/`fat serve` 能复现 `docs/m3-results.md`、`docs/m4-results.md`、`docs/m5-results.md`、`docs/m6-results.md` 的输出（解释率 93.63%、规则页 69 条）后，进入 M7。

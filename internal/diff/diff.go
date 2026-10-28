@@ -29,6 +29,9 @@ type Input struct {
 	ToDirs        []model.SnapshotDir
 	Candidates    []model.FileCandidate
 	TopN          int
+	// OnFileChange, if set, receives every file change with its display path
+	// resolved, before top-N truncation.
+	OnFileChange func(model.FileChange)
 }
 
 const defaultTopN = 20
@@ -192,6 +195,13 @@ func (c *computer) finish(in Input) model.DiffResult {
 
 	fromDirs := indexDirs(in.FromDirs)
 	toDirs := indexDirs(in.ToDirs)
+
+	if in.OnFileChange != nil {
+		fillFilePaths(c.changes, fromDirs, toDirs)
+		for _, ch := range c.changes {
+			in.OnFileChange(ch)
+		}
+	}
 
 	c.res.TopGrowth = rankGrowth(c.changes, topN)
 	c.res.TopDeleted = rankDeleted(c.changes, topN)
