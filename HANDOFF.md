@@ -1,7 +1,7 @@
 # FatTrace 项目交接文档
 
 - 更新时间：2026-10-28
-- 状态：**M0、M1、M2 已完成并通过门禁；M3（差异引擎）待开始**
+- 状态：**M0–M3 已完成并通过门禁；M4（静态周报）待开始**
 - 项目根目录：`D:\FatTraceDemo\FatTrace`
 
 ## 0. 项目一句话
@@ -20,7 +20,7 @@
 | Go 模块缓存 | `D:\FatTraceDemo\.cache\gomod` |
 | Go 构建缓存 | `D:\FatTraceDemo\.cache\gobuild` |
 | Go 代理 | `GOPROXY=https://goproxy.cn,direct`（已验证 200；proxy.golang.org 不可达，goproxy.io 超时） |
-| Git | 已在 FatTrace 内 `git init`，**尚未提交** |
+| Git | `git init` 已提交并推送到私有仓库 `Xeayy/FatTrace`（分支 master；首个提交 `06d6590` 覆盖 M0–M2） |
 | 其他 | Node 24、Python 3.14 可用；非管理员会话 |
 
 每次新终端先执行：
@@ -39,7 +39,13 @@ FatTrace/
   cmd/fat/main.go               CLI 入口：scan / snap / fileid / db / status / version
   cmd/fat/db.go                 CLI: db init / status
   cmd/fat/snap.go               CLI: snap（进度、Ctrl+C/Ctrl+Break、JSON）
+  cmd/fat/diff.go               CLI: diff（配对、--week、Top-N、表格/JSON）
   internal/model/model.go       FileRecord / ScanError / ScanStats
+  internal/model/diff.go        DiffResult / FileChange / DirChange / FileCandidate
+  internal/diff/diff.go         纯函数引擎：FRN join、分类、move 归属、Top-N
+  internal/diff/service.go      快照配对、流式加载、卷级校验、覆盖率警告
+  internal/diff/diff_test.go    14 个黄金用例
+  internal/diff/service_test.go 4 个服务层/卷级校验测试
   internal/scan/ntquery.go      NT API、结构体、卷空间、FileID、VolumeMetadata
   internal/scan/scan.go         递归遍历、IncludeDirs、reparse 跳过、硬链接去重、覆盖率
   internal/scan/scan_test.go    8 个扫描器测试
@@ -53,11 +59,13 @@ FatTrace/
   internal/store/staging.go     scan_files 流式写入（硬链接去重）
   internal/store/aggregate.go   目录自底向上聚合 + unknown 传播
   internal/store/snapshot.go    快照生命周期与原子切换
+  internal/store/snapshot_read.go 快照读取、流式扫描、配对查询、跨卷候选
   internal/store/store_test.go / snapshot_test.go  共 17 个 store 测试
   fat.exe                       本地构建产物（被 .gitignore 忽略）
   docs/m0-results.md            M0 实测记录
   docs/m1-results.md            M1 实测记录
   docs/m2-results.md            M2 实测记录
+  docs/m3-results.md            M3 实测记录
 ```
 
 ### 已实现能力
@@ -89,6 +97,18 @@ FatTrace/
 - Ctrl+C / Ctrl+Break → context cancel → `partial` + 退出码 130；强杀后自动恢复（无残留暂存、无脏基线、遗留 running 下次标 failed）。
 - 实测 D: 46 万文件：扫描 12.1s，全流程 21–25s，库 187 MiB，覆盖率 99.54%，两次目录数完全一致。细节见 `docs/m2-results.md`。
 
+### M3 已实现（差异引擎）
+
+- `internal/diff` 纯函数引擎：FRN 对齐，文件分 added/grown/shrunk/moved/renamed/deleted，目录另算 move/rename；尺寸变化优先于 move/rename，避免同一文件占多张榜。
+- 跨卷移入启发式：新增文件在别的卷最新 complete 快照里存在同名同尺寸同 mtime → `SuspectedFromVolume`（只标注，不参与 Δ）。
+- move-adjusted 目录归属：文件 move 在旧/新父链对冲**移动前**大小；目录 move 旧链加子树旧总额、新链减子树新总额，止于 LCA；只调整归属的祖先会被物化成 grown/shrunk 条目，TopDirs 再按直接子目录相同 Δ 去重。
+- 快照配对：默认最新 complete **卷根** → 同卷同根前一个 complete（跳过子目录与 partial/failed）；支持 `--from/--to/--volume`；校验 complete、同卷、同根、顺序。
+- 卷级校验：根 Δ vs 两次 `volume_used` 差，`|差| / max(|diskΔ|, 1% used) < 2%`；非卷根或缺用量时 `skipped`（不算失败）。
+- unknown：聚合阶段已传播；diff 只数「新变 unknown 的叶子目录」，警告数与真实读失败数一致。
+- 守恒校验：文件级 Δ 之和 ≠ 根目录 Δ 时 warning（不阻断）。
+- 流式：from 侧 `LoadSnapshotFileIndex`，to 侧 `StreamSnapshotFiles` + `computer` 累加器；46 万×2 峰值 **258.3 MB**（初版 416.4 MB），2.16s。
+- 实测 #2→#3：4 新增 / 2 删除 / 3 变大，净 +137.76 MiB，卷级差 0.00% OK；最大项是 FatTrace 自身 DB 增长。细节见 `docs/m3-results.md`。
+
 ### 当前 CLI
 
 ```bash
@@ -100,6 +120,11 @@ FatTrace/
 ./fat.exe snap --kind weekly "D:/"
 ./fat.exe snap --json "D:/" > snap.json
 ./fat.exe snap --max-depth 2 "D:/FatTraceDemo"   # 只生成快照，不动基线
+./fat.exe diff                         # 最新两个全卷 complete
+./fat.exe diff --week --top 20
+./fat.exe diff --from 2 --to 3
+./fat.exe diff --volume D: --json
+./fat.exe diff --cross-volume          # 标注疑似跨卷移入
 ./fat.exe fileid "D:/some/file.bin"
 ./fat.exe db init
 ./fat.exe db init --db "D:/tmp/test.db"
@@ -144,36 +169,39 @@ FatTrace/
 - **口径**：`total_alloc_bytes` 为主、`total_bytes` 并存；`current_files`/`snap_files` 为 FRN 去重口径。
 - **聚合方案**：Go 侧自底向上（深度排序 + 环保护），6.25 万目录实测无内存压力；未采用 SQL 写放大方案。
 
-### M3：差异引擎（下一步）
+### M3 定案（已实现）
 
-目标：FRN 对齐；文件/目录 rename、跨父 move、跨卷 move 标注；归因分类（新增/变大/变小/删除/move-in）；unknown 向祖先传播；Top-N 文件事件。产出 `fat diff --week --top 20`（表格 + JSON）。
+- **分类优先级**：尺寸 > move > rename（文件与目录同规则）；文件同时变大又改名只报 grown，但保留旧名/旧父供展示。
+- **move 归属口径**：文件 move 在旧/新父链对冲**移动前**大小，增长留在目标目录；目录 move 用 `TotalAllocBefore/After`，被移动子树只保留内部增量。
+- **祖先物化 + 去重**：仅因 move 改变归属的祖先也要出条目；TopDirs 隐藏与直接子目录 Δ 完全相同的祖先，只留最深所有者。
+- **卷级容差**：`|rootΔ − diskΔ| / max(|diskΔ|, 1% × used) × 100 < 2%`；非卷根或缺 `volume_used` 时 skipped，不算失败。
+- **`--week`**：只对跨度做 5–9 天警告，不拒绝执行。
+- **跨卷标注**：仅新增文件、仅其他卷最新 complete 快照、键 `(name,size,mtime)`，只标注不参与 Δ。
+- **默认配对**：`RecentComplete(50)` → 第一个 `isVolumeRoot` 的 complete 作为 to，`PreviousComplete` 同卷同根作为 from；子目录快照与全卷快照不可配对。
+- **流式**：from 索引 + to 流式累加；46 万×2 峰值 258.3 MB（初版 416.4 MB），2.16s。
 
-原规划的 diff 顺序（不可乱）：
+### M4：静态周报（下一步）
 
-1. 新旧文件表按 FRN join → 变大/变小；
-2. 未匹配的新 FRN → 新增（若同卷外存在同名同尺寸同 mtime，标注“疑似跨卷移入”）；
-3. 未匹配的旧 FRN → 删除（或被移出卷）；
-4. 目录 FRN 相同但父/名变化 → move，整棵子树不计增长，只改归属；
-5. 按目录聚合，unknown 向祖先传播，构建 Top Movers；
-6. 守恒校验：子目录 Δ 之和 = 父目录 Δ；根 Δ 对上 `GetDiskFreeSpaceEx` 的卷用量变化（容差内），否则报告“数据质量警告”。
+目标：内嵌 JSON 的单文件 HTML 周报：Top Movers、treemap、unknown 斜纹、覆盖率横幅、错误摘要。产出离线可打开的周报文件，数据与 `fat diff --json` 同源。
+
+门禁：离线打开 2 秒内回答“谁胖了”；周报数值与 CLI 逐项一致。
 
 建议步骤：
 
-1. `internal/model` 增加 Diff/Change 类型；diff 只吃快照数据，不依赖 scan（可用构造数据做黄金测试）。
-2. `internal/diff` 从库里读两个快照的 `snap_files/snap_dirs`（先 `--from/--to` 指定，`--week` 自动取最近两个 complete）；46 万 × 2 行先实测内存，再决定是否流式。
-3. rename/move：文件 FRN 相同但 `(parent_frn,name)` 变 → move；目录 FRN 相同但父变 → 整棵子树 move。
-4. 归因与聚合：目录 Δ 自底向上、unknown 传播、Top-N 文件事件。
-5. CLI `fat diff`（表格 + `--json`）。
-6. 12 条黄金用例（纯数据）：新增/变大/变小/删除、文件 rename、目录 rename、目录跨父 move、跨卷 move、硬链接去重、junction 环、权限拒绝与 unknown 传播、长路径/Unicode、稀疏/压缩、扫描中断恢复。
-7. 门禁：12 条全过；卷级 Δ 与 `GetDiskFreeSpaceEx` 实测差 < 2%（白名单 + unknown 之外）。
+1. `internal/report`：定义周报数据（复用 `model.DiffResult` + 两次快照元数据），CLI 增加 `fat report --from/--to --out week.html`（或 `fat diff --html`）。
+2. 单文件模板：`embed` HTML/CSS/JS，JSON 内联，无任何外部请求；Canvas 逐层渲染 treemap，不一次画全卷。
+3. 关键区块：Top Movers（文件/目录）、目录 Δ treemap、unknown 斜纹与图例、覆盖率横幅、扫描错误摘要、volume check。
+4. 一致性：周报只消费 diff 结果，不在模板里重算统计。
+5. 验收：D: 真实快照出报，离线打开首屏 < 2s，数值与 `fat diff` 对照。
 
-M3 开工前要定：
+M4 开工前要定：
 
-- `--week` 的快照选择规则（最近两个 complete / 7 天窗口内最接近的）；
-- 跨卷 move 只在库内已有其他卷快照时标注，单卷 v1 先留字段；
-- 文件级 Top-N 是否只对“变大”排序，删除单独列表。
+- 周报时间窗口：固定自然周 / 滚动 7 天 / 跟随快照跨度；
+- treemap 面积口径：目录 `DeltaAlloc`（谁胖了）还是 `TotalAlloc`（现在多大）；
+- unknown 目录的斜纹实现与图例；
+- 内嵌全部 Top-N 还是只嵌摘要 + 目录树。
 
-开发样本：`D:\FatTraceDemo\.cache\fattrace\fattrace.db` 已有 D: 的真实快照（#2/#3 全卷、#1/#6 子目录），可直接做 diff 联调；其中 #4 partial、#5 failed 用于异常路径。
+开发样本：`D:\FatTraceDemo\.cache\fattrace\fattrace.db` 已有 D: 的真实快照（#2/#3 全卷、#1/#6 子目录），可直接做 diff/周报联调；其中 #4 partial、#5 failed 用于异常路径。
 
 ## 6. 关键实现细节 / 坑
 
@@ -199,6 +227,13 @@ M3 开工前要定：
 - `snap_dirs` 行数 = `stats.Dirs` + 打不开的目录数（失败目录仍作为目录记录落库并标 unknown）；别拿两者做等值断言。
 - `current_files` 是 FRN 去重口径：`current_files = files - hardlink_dupes`（D: 实测 459,698 − 220 = 459,478）。
 - 全卷快照包含自身 DB/WAL，连续两次的字节数会因库增长漂移；可复现性看目录数与去重文件数。
+- `StreamSnapshotFiles` 的回调运行在 store 唯一连接上，回调里再查库会死锁；`diff.Run` 必须先读完 `snap_dirs`、跨卷候选，再开始流式扫文件。
+- `diff.Compute` 会**消费** from 索引（匹配后从 map 删除，剩余即删除项）；同一个 `FromFileIndex` 不能给第二次 diff 复用。
+- 文件 move 的归属调整两侧都用**移动前**大小；用移动后大小会把移入体积算成目标目录增长，并破坏守恒。
+- 卷级容差的分母是 `max(|diskΔ|, 1% used)`；安静周 `diskΔ` 接近 0 时靠 1% 下限兜底，别改成直接除 `diskΔ`。
+- 守恒校验是文件 Δ 与根目录 Δ 的**精确相等**；受保护目录变化、WAL/SHM 重建都会让它响，只做 warning 不阻断。
+- SQLite 的 `-shm`/`-wal` 关闭时删除、下次打开新建，FRN 随之变化，diff 中表现为 delete + add；这是快照自身的预期噪声。
+- 默认配对会跳过更新的子目录快照（只选 complete 卷根）；要对比子目录必须显式 `--from/--to`，且两端根必须一致。
 
 ## 7. 风险与安全提醒
 
@@ -211,7 +246,7 @@ M3 开工前要定：
 
 新对话可以直接发：
 
-> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`，从 M3 差异引擎开始继续 FatTrace 项目。保持“所有工具/缓存都在工作区”的原则。
+> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`，从 M4 静态周报开始继续 FatTrace 项目。保持“所有工具/缓存都在工作区”的原则。
 
 接手后先跑：
 
@@ -222,6 +257,7 @@ go test ./... -count=1
 export FATTRACE_HOME='D:\FatTraceDemo\.cache\fattrace'
 ./fat.exe status
 ./fat.exe snap --quiet --max-depth 2 "D:/FatTraceDemo"
+./fat.exe diff --from 2 --to 3
 ```
 
-确认测试全绿、库内有两份可对比的 complete 快照后，进入 M3。
+确认测试全绿、`fat diff` 能复现 `docs/m3-results.md` 的输出后，进入 M4。
