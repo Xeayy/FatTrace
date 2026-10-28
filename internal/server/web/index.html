@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FatTrace · 本地只读</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">FatTrace <span class="sub">本地只读</span></div>
+  <nav id="nav">
+    <a href="#/overview" data-view="overview">总览</a>
+    <a href="#/explorer" data-view="explorer">目录下钻</a>
+    <a href="#/compare" data-view="compare">对比</a>
+    <a href="#/timeline" data-view="timeline">时间轴</a>
+    <a href="#/rules" data-view="rules">规则与设置</a>
+    <a href="#/status" data-view="status">状态</a>
+  </nav>
+</header>
+<div id="banners"></div>
+<main id="view" aria-live="polite"></main>
+<footer>
+  仅监听 127.0.0.1 · API 需会话 token · 只读，不提供删除或清理操作
+</footer>
+<div id="tooltip" class="tooltip" role="tooltip"></div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

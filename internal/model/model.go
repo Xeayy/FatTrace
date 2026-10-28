@@ -1,6 +1,22 @@
 package model
 
-import "time"
+import (
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+// IsVolumeRoot reports whether root is a drive root such as `D:\` rather than a
+// subdirectory scan. Only volume-root snapshots update the baseline and take
+// part in the volume-level usage check.
+func IsVolumeRoot(root string) bool {
+	vol := filepath.VolumeName(root)
+	if len(vol) != 2 || vol[1] != ':' {
+		return false
+	}
+	clean := filepath.Clean(root)
+	return len(clean) == 2 || strings.EqualFold(clean, vol+`\`)
+}
 
 type FileRecord struct {
 	FRN       uint64

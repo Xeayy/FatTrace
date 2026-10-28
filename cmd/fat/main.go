@@ -32,6 +32,8 @@ func main() {
 		diffCmd(os.Args[2:])
 	case "report":
 		reportCmd(os.Args[2:])
+	case "serve":
+		serveCmd(os.Args[2:])
 	case "fileid":
 		fileIDCmd(os.Args[2:])
 	case "db":
@@ -57,6 +59,7 @@ usage:
   fat snap [flags] <root>
   fat diff [flags]
   fat report [flags]
+  fat serve [flags]
   fat fileid <path>
   fat db init [--db path]
   fat status [--json] [--db path]
@@ -93,6 +96,11 @@ report flags:
   -top int         rows per ranking list (default 20)
   -cross-volume    annotate added files that match other volumes
   -out string      output HTML file (default "fattrace-report.html")
+  -db string       database file (overrides FATTRACE_HOME)
+
+serve flags:
+  -addr string     listen address, loopback only (default "127.0.0.1:0")
+  -top int         ranking rows per diff API call (default 20)
   -db string       database file (overrides FATTRACE_HOME)
 
 The database defaults to %LOCALAPPDATA%\FatTrace\fattrace.db.
