@@ -112,6 +112,19 @@
     display: inline-block; border: 1px solid var(--line); border-radius: 999px;
     padding: 0 7px; font-size: 11px; color: var(--muted); margin-right: 6px;
   }
+  .tag.rule { border-color: #3b536b; color: #a9c6e0; }
+  .tag.rule.low { border-color: #5d4d16; color: #d8c179; }
+  .explain-grid { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  @media (max-width: 900px) { .explain-grid { grid-template-columns: 1fr; } }
+  .cat-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 7px 0; border-top: 1px solid rgba(42,51,64,.55); }
+  .cat-row:first-child { border-top: 0; }
+  .cat-head { display: flex; gap: 8px; align-items: baseline; }
+  .cat-name { font-weight: 550; }
+  .cat-meta { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .cat-bytes { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .cat-bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: #202833; overflow: hidden; }
+  .cat-bar i { display: block; height: 100%; background: var(--pos); border-radius: 2px; }
+  .subhead { color: var(--muted); font-size: 12px; margin: 0 0 6px; }
   .empty { color: var(--muted); padding: 8px 0; }
   .check-table {
     display: grid; grid-template-columns: max-content 1fr; gap: 4px 18px;
@@ -144,6 +157,20 @@
   <div class="treemap-wrap" id="treemap-wrap">
     <canvas id="treemap"></canvas>
     <div class="tooltip" id="tooltip"></div>
+  </div>
+</section>
+
+<section class="panel" id="explain-panel">
+  <h2>增长解释 <span class="note">按规则归类“新增 + 变大”的实占增长；规则只做标注，不会删除任何文件</span></h2>
+  <div class="explain-grid">
+    <div>
+      <p class="subhead" id="explain-cats-head">已解释增长 · 按类别</p>
+      <div id="explain-cats"></div>
+    </div>
+    <div>
+      <p class="subhead" id="explain-unexp-head">未解释增长 · Top</p>
+      <div id="explain-unexp"></div>
+    </div>
   </div>
 </section>
 
@@ -231,6 +258,11 @@
   if (D.warnings && D.warnings.length) {
     banner("warn", "数据质量警告 " + D.warnings.length + " 条", "详见“校验与警告”。");
   }
+  const ex = D.explanation;
+  if (ex && ex.explained_pct < 70) {
+    banner("warn", "增长解释率 " + fmtPct(ex.explained_pct),
+      "低于 70% 目标：" + fmtBytes(ex.unexplained_bytes) + " 增长没有命中规则，主要是新文件类型或用户数据。");
+  }
 
   // ---------- kpis ----------
   const kpis = $("kpis");
@@ -261,6 +293,12 @@
   kpi("覆盖率", to.coverage_pct > 0 ? fmtPct(to.coverage_pct) : "—",
     check.unknown_dirs_after > 0 ? check.unknown_dirs_after + " 个目录不可读" : "无不可读目录",
     to.coverage_pct > 0 && to.coverage_pct < 95 ? "warn" : "");
+  if (ex) {
+    kpi("增长解释率", ex.growth_bytes > 0 ? fmtPct(ex.explained_pct) : "—",
+      fmtBytes(ex.explained_bytes) + " / " + fmtBytes(ex.growth_bytes) + " 已解释 · " +
+      ex.rules_loaded + " 条规则",
+      ex.growth_bytes > 0 && ex.explained_pct < 70 ? "warn" : "ok");
+  }
 
   // ---------- treemap ----------
   const wrap = $("treemap-wrap");
@@ -495,24 +533,36 @@
     root.appendChild(ul);
   }
 
+  function ruleTag(rule) {
+    if (!rule) return null;
+    const t = el("span", "tag rule" + (rule.confidence === "low" ? " low" : ""),
+      rule.category_label || rule.category);
+    t.title = rule.name + " · " + rule.id + " · 置信度 " + rule.confidence;
+    return t;
+  }
+
   function fileRow(f, mode) {
     const li = el("li", "row");
     const main = el("div", "row-main");
     main.appendChild(el("div", "row-title", f.path || f.name));
-    let meta;
+    const meta = el("div", "row-meta");
+    const rt = ruleTag(f.rule);
+    if (rt) meta.appendChild(rt);
+    let text;
     if (mode === "growth") {
       if (f.kind === "added") {
-        meta = "新增";
+        text = "新增";
         if (f.suspected_from_volume) {
-          meta += " · 疑似跨卷移入 0x" + f.suspected_from_volume.toString(16).toUpperCase().padStart(8, "0");
+          text += " · 疑似跨卷移入 0x" + f.suspected_from_volume.toString(16).toUpperCase().padStart(8, "0");
         }
       } else {
-        meta = fmtBytes(f.alloc_before) + " → " + fmtBytes(f.alloc_after);
+        text = fmtBytes(f.alloc_before) + " → " + fmtBytes(f.alloc_after);
       }
     } else {
-      meta = "删除 · 原有 " + fmtBytes(f.alloc_before);
+      text = "删除 · 原有 " + fmtBytes(f.alloc_before);
     }
-    main.appendChild(el("div", "row-meta", meta));
+    meta.appendChild(document.createTextNode(text));
+    main.appendChild(meta);
     li.appendChild(main);
     li.appendChild(el("div", "row-delta " + signClass(f.delta_alloc), signedBytes(f.delta_alloc)));
     return li;
@@ -522,9 +572,13 @@
     const li = el("li", "row");
     const main = el("div", "row-main");
     main.appendChild(el("div", "row-title", d.path || d.name));
-    main.appendChild(el("div", "row-meta",
+    const meta = el("div", "row-meta");
+    const rt = ruleTag(d.rule);
+    if (rt) meta.appendChild(rt);
+    meta.appendChild(document.createTextNode(
       fmtCount(d.files_after) + " 文件 · " + fmtBytes(d.total_alloc_after) + " 实占" +
       (d.unknown_after ? " · 含不可读目录" : "")));
+    main.appendChild(meta);
     li.appendChild(main);
     li.appendChild(el("div", "row-delta " + signClass(d.delta_alloc), signedBytes(d.delta_alloc)));
     return li;
@@ -538,6 +592,8 @@
     const meta = el("div", "row-meta");
     meta.appendChild(el("span", "tag", c.kind === "renamed" ? "rename" : "move"));
     if (c.old_path && c.old_path !== c.path) meta.appendChild(document.createTextNode("从 " + c.old_path));
+    const rt = ruleTag(c.rule);
+    if (rt) meta.appendChild(rt);
     main.appendChild(meta);
     li.appendChild(main);
     const size = isDir ? c.total_alloc_after : c.alloc_after;
@@ -562,6 +618,61 @@
   list("file-moves", D.file_moves, (c) => moveRow(c, false), "没有文件 move/rename");
   list("dir-moves", D.dir_moves, (c) => moveRow(c, true), "没有目录 move/rename");
   list("errors", D.errors, errorRow, "没有记录到扫描错误");
+
+  // ---------- explanation ----------
+  if (!ex) {
+    $("explain-panel").style.display = "none";
+  } else {
+    $("explain-cats-head").textContent =
+      "已解释增长 · 按类别（" + fmtBytes(ex.explained_bytes) + " / " + fmtBytes(ex.growth_bytes) + "）";
+    const catsRoot = $("explain-cats");
+    catsRoot.textContent = "";
+    if (!ex.categories || !ex.categories.length) {
+      catsRoot.appendChild(el("div", "empty", "没有命中的增长"));
+    } else {
+      const maxBytes = Math.max.apply(null, ex.categories.map((c) => c.bytes));
+      ex.categories.forEach((c) => {
+        const row = el("div", "cat-row");
+        const head = el("div", "cat-head");
+        head.appendChild(el("span", "cat-name", c.label));
+        head.appendChild(el("span", "cat-meta", fmtCount(c.files) + " 文件"));
+        row.appendChild(head);
+        row.appendChild(el("div", "cat-bytes", fmtBytes(c.bytes)));
+        const bar = el("div", "cat-bar");
+        const fill = el("i");
+        fill.style.width = (maxBytes > 0 ? Math.max(2, Math.round(c.bytes / maxBytes * 100)) : 0) + "%";
+        bar.appendChild(fill);
+        row.appendChild(bar);
+        catsRoot.appendChild(row);
+      });
+    }
+
+    $("explain-unexp-head").textContent = ex.unexplained_total > 0
+      ? "未解释增长 · Top（" + fmtBytes(ex.unexplained_bytes) + "，共 " + fmtCount(ex.unexplained_total) + " 个文件）"
+      : "未解释增长 · Top";
+    const unexpRoot = $("explain-unexp");
+    unexpRoot.textContent = "";
+    if (!ex.unexplained || !ex.unexplained.length) {
+      unexpRoot.appendChild(el("div", "empty", "全部增长都命中了规则"));
+    } else {
+      const ul = el("ul", "rows");
+      ex.unexplained.forEach((u) => {
+        const li = el("li", "row");
+        const main = el("div", "row-main");
+        main.appendChild(el("div", "row-title", u.path));
+        main.appendChild(el("div", "row-meta",
+          (u.kind === "added" ? "新增" : "变大") + " · 未命中规则"));
+        li.appendChild(main);
+        li.appendChild(el("div", "row-delta pos", signedBytes(u.delta_alloc)));
+        ul.appendChild(li);
+      });
+      unexpRoot.appendChild(ul);
+      if (ex.unexplained_total > ex.unexplained.length) {
+        unexpRoot.appendChild(el("div", "empty",
+          "仅显示前 " + ex.unexplained.length + " 个，共 " + fmtCount(ex.unexplained_total) + " 个未解释文件"));
+      }
+    }
+  }
 
   // ---------- check + warnings ----------
   const warnRoot = $("warnings");

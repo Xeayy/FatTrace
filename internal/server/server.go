@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"fattrace/internal/model"
+	"fattrace/internal/rules"
 	"fattrace/internal/store"
 )
 
@@ -42,6 +43,7 @@ type Server struct {
 	topN      int
 	dirLimit  int
 	fileLimit int
+	rules     *rules.Set
 	mux       *http.ServeMux
 
 	assets map[string]staticAsset
@@ -83,12 +85,17 @@ func New(st *store.Store, opts Options) (*Server, error) {
 			return nil, err
 		}
 	}
+	set, err := rules.Load(st.Path())
+	if err != nil {
+		return nil, err
+	}
 	s := &Server{
 		st:        st,
 		token:     opts.Token,
 		topN:      opts.TopN,
 		dirLimit:  opts.DirLimit,
 		fileLimit: opts.FileLimit,
+		rules:     set,
 		mux:       http.NewServeMux(),
 		assets:    map[string]staticAsset{},
 		diffCache: map[diffKey]model.DiffResult{},
@@ -104,6 +111,7 @@ func New(st *store.Store, opts Options) (*Server, error) {
 	s.mux.HandleFunc("GET /api/status", s.auth(s.handleStatus))
 	s.mux.HandleFunc("GET /api/snapshots", s.auth(s.handleSnapshots))
 	s.mux.HandleFunc("GET /api/diff", s.auth(s.handleDiff))
+	s.mux.HandleFunc("GET /api/rules", s.auth(s.handleRules))
 	s.mux.HandleFunc("GET /api/dir", s.auth(s.handleDir))
 	s.mux.HandleFunc("GET /api/trend", s.auth(s.handleTrend))
 	return s, nil

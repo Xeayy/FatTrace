@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"fattrace/internal/diff"
+	"fattrace/internal/rules"
 	"fattrace/internal/store"
 )
 
@@ -63,9 +64,9 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 	s.diffMu.Lock()
 	res, ok := s.diffCache[key]
 	if !ok {
-		res, err = diff.Run(r.Context(), s.st, diff.Options{
+		res, err = rules.Diff(r.Context(), s.st, diff.Options{
 			FromID: fromID, ToID: toID, TopN: topN, CrossVolume: cross,
-		})
+		}, s.rules)
 		if err == nil {
 			if len(s.diffCache) >= 8 {
 				clear(s.diffCache)
@@ -84,6 +85,10 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+func (s *Server) handleRules(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.rules)
 }
 
 // latestSnapshotID participates in auto-pair cache keys so a fresh scan does

@@ -13,6 +13,7 @@ import (
 
 	"fattrace/internal/diff"
 	"fattrace/internal/model"
+	"fattrace/internal/rules"
 	"fattrace/internal/store"
 )
 
@@ -42,10 +43,15 @@ func diffCmd(args []string) {
 	}
 	defer st.Close()
 
-	res, err := diff.Run(context.Background(), st, diff.Options{
+	set, err := rules.Load(path)
+	if err != nil {
+		fail(err)
+	}
+
+	res, err := rules.Diff(context.Background(), st, diff.Options{
 		FromID: *fromID, ToID: *toID, RootPrefix: *volume, TopN: *topN,
 		CrossVolume: *crossVolume,
-	})
+	}, set)
 	if err != nil {
 		fail(err)
 	}
@@ -124,12 +130,65 @@ func printDiff(r model.DiffResult) {
 		fmt.Printf("  unknown dirs after snapshot: %d (unknown propagates to ancestors)\n", r.Check.UnknownDirs)
 	}
 
+	printExplanation(r.Explanation)
+
 	if len(r.Warnings) > 0 {
 		fmt.Println("\nwarnings:")
 		for _, w := range r.Warnings {
 			fmt.Printf("  - %s\n", w)
 		}
 	}
+}
+
+func printExplanation(ex *model.Explanation) {
+	if ex == nil {
+		return
+	}
+	fmt.Println("\nexplanation:")
+	if ex.GrowthBytes == 0 {
+		fmt.Printf("  no observed growth (added + grown files) · %d rules loaded\n", ex.RulesLoaded)
+		return
+	}
+	fmt.Printf("  coverage  %s / %s  (%.2f%%)  %d rules · net %s\n",
+		formatBytes(ex.ExplainedBytes), formatBytes(ex.GrowthBytes), ex.ExplainedPct,
+		ex.RulesLoaded, signedBytes(ex.NetGrowthBytes))
+	if ex.UnexplainedBytes > 0 {
+		fmt.Printf("  unexplained  %s\n", formatBytes(ex.UnexplainedBytes))
+	}
+	if len(ex.Categories) > 0 {
+		fmt.Println("  categories:")
+		limit := len(ex.Categories)
+		if limit > 8 {
+			limit = 8
+		}
+		for _, c := range ex.Categories[:limit] {
+			fmt.Printf("    %10s  %-14s  %s\n", formatBytes(c.Bytes), c.Label,
+				formatCount(c.Files)+" files")
+		}
+		if len(ex.Categories) > limit {
+			fmt.Printf("    ... %d more categories\n", len(ex.Categories)-limit)
+		}
+	}
+	if len(ex.Unexplained) > 0 {
+		fmt.Println("  unexplained top:")
+		limit := len(ex.Unexplained)
+		if limit > 10 {
+			limit = 10
+		}
+		for _, u := range ex.Unexplained[:limit] {
+			fmt.Printf("    %10s  %s\n", formatBytes(u.DeltaAlloc), u.Path)
+		}
+		if ex.UnexplainedTotal > limit {
+			fmt.Printf("    ... %d more files\n", ex.UnexplainedTotal-limit)
+		}
+	}
+}
+
+func ruleSuffix(r *model.RuleRef) string {
+	if r == nil {
+		return ""
+	}
+	return "  [" + r.CategoryLabel + "]"
 }
 
 func printFileList(title string, items []model.FileChange) {
@@ -144,13 +203,14 @@ func printFileList(title string, items []model.FileChange) {
 			if c.SuspectedFromVolume != 0 {
 				line += fmt.Sprintf("  [suspected cross-volume move from 0x%08X]", c.SuspectedFromVolume)
 			}
+			line += ruleSuffix(c.Rule)
 			fmt.Println(line)
 		case model.ChangeGrown:
-			fmt.Printf("  %12s  %s  (%s → %s)\n", signedBytes(c.DeltaAlloc), c.Path,
-				formatBytes(c.AllocBefore), formatBytes(c.AllocAfter))
+			fmt.Printf("  %12s  %s  (%s → %s)%s\n", signedBytes(c.DeltaAlloc), c.Path,
+				formatBytes(c.AllocBefore), formatBytes(c.AllocAfter), ruleSuffix(c.Rule))
 		default:
-			fmt.Printf("  %12s  %s  (was %s)\n", signedBytes(c.DeltaAlloc), c.Path,
-				formatBytes(c.AllocBefore))
+			fmt.Printf("  %12s  %s  (was %s)%s\n", signedBytes(c.DeltaAlloc), c.Path,
+				formatBytes(c.AllocBefore), ruleSuffix(c.Rule))
 		}
 	}
 }
@@ -169,8 +229,8 @@ func printFileMoves(items []model.FileChange) {
 		if oldPath == "" {
 			oldPath = c.Path
 		}
-		fmt.Printf("  %12s  %s\n                 → %s  (%s)\n",
-			formatBytes(c.AllocAfter), oldPath, c.Path, label)
+		fmt.Printf("  %12s  %s\n                 → %s  (%s)%s\n",
+			formatBytes(c.AllocAfter), oldPath, c.Path, label, ruleSuffix(c.Rule))
 	}
 }
 
@@ -180,8 +240,8 @@ func printDirList(title string, items []model.DirChange) {
 	}
 	fmt.Printf("\n%s:\n", title)
 	for _, d := range items {
-		fmt.Printf("  %12s  %s  (%s files)\n", signedBytes(d.DeltaAlloc), d.Path,
-			formatCount(d.FilesAfter))
+		fmt.Printf("  %12s  %s  (%s files)%s\n", signedBytes(d.DeltaAlloc), d.Path,
+			formatCount(d.FilesAfter), ruleSuffix(d.Rule))
 	}
 }
 
@@ -199,8 +259,8 @@ func printDirMoves(items []model.DirChange) {
 		if oldPath == "" {
 			oldPath = d.Path
 		}
-		fmt.Printf("  %12s  %s\n                 → %s  (%s)\n",
-			formatBytes(d.TotalAllocAfter), oldPath, d.Path, label)
+		fmt.Printf("  %12s  %s\n                 → %s  (%s)%s\n",
+			formatBytes(d.TotalAllocAfter), oldPath, d.Path, label, ruleSuffix(d.Rule))
 	}
 }
 

@@ -52,6 +52,7 @@ type Data struct {
 	ShrunkDirs    []model.DirChange  `json:"top_shrunk_dirs"`
 	DirMoves      []model.DirChange  `json:"dir_moves"`
 	Tiles         []Tile             `json:"tiles"`
+	Explanation   *model.Explanation `json:"explanation,omitempty"`
 	Errors        []ErrorRow         `json:"errors"`
 	Warnings      []string           `json:"warnings"`
 }
@@ -75,6 +76,7 @@ func Build(res model.DiffResult, errs []ErrorRow, generatedAt time.Time) ([]byte
 		ShrunkDirs:    res.ShrunkDirs,
 		DirMoves:      res.DirMoves,
 		Tiles:         buildTiles(res.TopDirs, res.Totals.DeltaAlloc),
+		Explanation:   res.Explanation,
 		Errors:        errs,
 		Warnings:      res.Warnings,
 	}

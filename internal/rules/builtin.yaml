@@ -1,0 +1,685 @@
+version: 1
+rules:
+  - id: browser.chrome.cache
+    name: Chrome 缓存
+    category: browser
+    confidence: high
+    description: Chrome 的 HTTP 缓存、代码缓存、GPU 缓存与 Service Worker 缓存，可由浏览器按需重建。
+    match:
+      path_globs:
+        - '**\AppData\Local\Google\Chrome\User Data\**\Cache\**'
+        - '**\AppData\Local\Google\Chrome\User Data\**\Code Cache\**'
+        - '**\AppData\Local\Google\Chrome\User Data\**\GPUCache\**'
+        - '**\AppData\Local\Google\Chrome\User Data\**\Service Worker\**'
+        - '**\AppData\Local\Google\Chrome\User Data\**\DawnGraphiteCache\**'
+        - '**\AppData\Local\Google\Chrome\User Data\**\GrShaderCache\**'
+
+  - id: browser.edge.cache
+    name: Edge 缓存
+    category: browser
+    confidence: high
+    description: Microsoft Edge 的 HTTP、代码、GPU 与 Service Worker 缓存，可由浏览器按需重建。
+    match:
+      path_globs:
+        - '**\AppData\Local\Microsoft\Edge\User Data\**\Cache\**'
+        - '**\AppData\Local\Microsoft\Edge\User Data\**\Code Cache\**'
+        - '**\AppData\Local\Microsoft\Edge\User Data\**\GPUCache\**'
+        - '**\AppData\Local\Microsoft\Edge\User Data\**\Service Worker\**'
+
+  - id: browser.firefox.cache
+    name: Firefox 缓存
+    category: browser
+    confidence: high
+    description: Firefox 配置目录下的 cache2 与 startupCache，可由浏览器按需重建。
+    match:
+      path_globs:
+        - '**\AppData\Local\Mozilla\Firefox\Profiles\**\cache2\**'
+        - '**\AppData\Local\Mozilla\Firefox\Profiles\**\startupCache\**'
+
+  - id: browser.webview2.cache
+    name: WebView2 缓存
+    category: browser
+    confidence: high
+    description: 内嵌 WebView2 的浏览器缓存目录，可由宿主应用按需重建。
+    match:
+      path_globs:
+        - '**\AppData\Local\Microsoft\EdgeWebView\**\Cache\**'
+        - '**\EBWebView\**\Cache\**'
+        - '**\EBWebView\**\Code Cache\**'
+
+  - id: browser.chromium.profile-cache
+    name: Chromium 配置缓存
+    category: browser
+    confidence: low
+    description: 任意 Chromium 配置目录下的 Cache、Code Cache、GPUCache 或 Service Worker 目录，按路径名推断。
+    match:
+      path_globs:
+        - '**\Default\Cache\**'
+        - '**\Default\Code Cache\**'
+        - '**\Default\GPUCache\**'
+        - '**\Default\Service Worker\**'
+
+  - id: temp.user
+    name: 用户临时文件
+    category: temp
+    confidence: high
+    description: 当前用户的 Temp 目录，应用退出或重启后大多可重建；正在使用的文件不应手工删除。
+    match:
+      path_globs:
+        - '**\AppData\Local\Temp\**'
+
+  - id: temp.windows
+    name: 系统临时文件
+    category: temp
+    confidence: high
+    description: Windows\Temp 系统临时目录，通常由安装程序和系统组件使用。
+    match:
+      path_globs:
+        - '**\Windows\Temp\**'
+
+  - id: logs.cbs
+    name: CBS 组件日志
+    category: logs
+    confidence: high
+    description: Windows 组件服务日志，更新与修复期间会快速变大。
+    match:
+      path_globs:
+        - '**\Windows\Logs\CBS\**'
+
+  - id: logs.windows
+    name: Windows 日志目录
+    category: logs
+    confidence: medium
+    description: Windows\Logs 下的系统与服务日志，可由系统按策略轮转或覆盖。
+    match:
+      path_globs:
+        - '**\Windows\Logs\**'
+
+  - id: logs.event
+    name: 事件日志
+    category: logs
+    confidence: high
+    description: Windows 事件日志数据库，按日志策略滚动覆盖。
+    match:
+      path_globs:
+        - '**\Windows\System32\winevt\Logs\**'
+
+  - id: logs.iis
+    name: IIS 日志
+    category: logs
+    confidence: high
+    description: IIS 站点访问日志，按站点与日期分文件增长。
+    match:
+      path_globs:
+        - '**\inetpub\logs\**'
+
+  - id: logs.files
+    name: 日志文件
+    category: logs
+    confidence: low
+    description: 以 .log、.log.*、.etl 或 .trace 结尾的日志与跟踪文件，按扩展名推断。
+    match:
+      name_globs:
+        - '*.log'
+        - '*.log.*'
+        - '*.etl'
+        - '*.trace'
+
+  - id: crash.local
+    name: 应用崩溃转储
+    category: crash
+    confidence: high
+    description: 用户 CrashDumps 目录下的崩溃转储，通常只用于事后诊断。
+    match:
+      path_globs:
+        - '**\AppData\Local\CrashDumps\**'
+
+  - id: crash.dmp
+    name: 转储文件
+    category: crash
+    confidence: medium
+    description: 以 .dmp 或 .mdmp 结尾的进程转储文件，按扩展名推断。
+    match:
+      name_globs:
+        - '*.dmp'
+        - '*.mdmp'
+
+  - id: crash.wer
+    name: Windows 错误报告
+    category: crash
+    confidence: high
+    description: Windows 错误报告队列与归档，可随报告上传后清理。
+    match:
+      path_globs:
+        - '**\ProgramData\Microsoft\Windows\WER\**'
+        - '**\AppData\Local\Microsoft\Windows\WER\**'
+
+  - id: crash.crashpad
+    name: Crashpad 报告
+    category: crash
+    confidence: medium
+    description: Chromium 系应用的 Crashpad 崩溃报告目录。
+    match:
+      path_globs:
+        - '**\Crashpad\**'
+
+  - id: pkg.npm
+    name: npm 缓存
+    category: package
+    confidence: high
+    description: npm 的包缓存与本地索引，可由 npm 按需重新下载。
+    match:
+      path_globs:
+        - '**\AppData\Local\npm-cache\**'
+        - '**\AppData\Roaming\npm-cache\**'
+        - '**\.npm\_cacache\**'
+
+  - id: pkg.pnpm
+    name: pnpm 存储
+    category: package
+    confidence: high
+    description: pnpm 的全局内容寻址存储与缓存。
+    match:
+      path_globs:
+        - '**\AppData\Local\pnpm\**'
+        - '**\.pnpm-store\**'
+
+  - id: pkg.yarn
+    name: Yarn 缓存
+    category: package
+    confidence: high
+    description: Yarn 的包缓存，可由 yarn 按需重新下载。
+    match:
+      path_globs:
+        - '**\AppData\Local\Yarn\Cache\**'
+        - '**\.yarn\cache\**'
+
+  - id: pkg.pip
+    name: pip 缓存
+    category: package
+    confidence: high
+    description: pip 的 wheel 与 HTTP 缓存，可由 pip 按需重新下载。
+    match:
+      path_globs:
+        - '**\AppData\Local\pip\**'
+        - '**\.cache\pip\**'
+
+  - id: pkg.nuget
+    name: NuGet 缓存
+    category: package
+    confidence: high
+    description: NuGet 的全局包目录、HTTP 缓存与临时缓存。
+    match:
+      path_globs:
+        - '**\.nuget\packages\**'
+        - '**\AppData\Local\NuGet\**'
+
+  - id: pkg.chocolatey
+    name: Chocolatey 数据
+    category: package
+    confidence: high
+    description: Chocolatey 的包库与下载缓存。
+    match:
+      path_globs:
+        - '**\ProgramData\chocolatey\lib\**'
+        - '**\ProgramData\chocolatey\cache\**'
+        - '**\chocolatey\logs\**'
+
+  - id: pkg.scoop
+    name: Scoop 数据
+    category: package
+    confidence: medium
+    description: Scoop 的应用目录与下载缓存。
+    match:
+      path_globs:
+        - '**\scoop\cache\**'
+        - '**\scoop\apps\**'
+
+  - id: pkg.conda
+    name: Conda 包缓存
+    category: package
+    confidence: high
+    description: Conda 下载与解压后的包缓存，可由 conda clean 回收。
+    match:
+      path_globs:
+        - '**\miniconda3\pkgs\**'
+        - '**\anaconda3\pkgs\**'
+        - '**\AppData\Local\conda\**'
+
+  - id: pkg.vcpkg
+    name: vcpkg 数据
+    category: package
+    confidence: medium
+    description: vcpkg 的下载缓存与已安装包目录。
+    match:
+      path_globs:
+        - '**\vcpkg\downloads\**'
+        - '**\vcpkg\installed\**'
+        - '**\vcpkg\buildtrees\**'
+
+  - id: tool.go.mod
+    name: Go 模块缓存
+    category: toolchain
+    confidence: high
+    description: Go 的模块下载缓存，可由 go mod download 重新获取。
+    match:
+      path_globs:
+        - '**\go\pkg\mod\**'
+        - '**\.cache\gomod\**'
+        - '**\pkg\mod\cache\download\**'
+
+  - id: tool.go.build
+    name: Go 构建缓存
+    category: toolchain
+    confidence: high
+    description: Go 的编译与测试结果缓存，可由 go clean -cache 回收，后续构建会变慢。
+    match:
+      path_globs:
+        - '**\AppData\Local\go-build\**'
+        - '**\.cache\gobuild\**'
+
+  - id: tool.cargo
+    name: Cargo 缓存
+    category: toolchain
+    confidence: high
+    description: Cargo 的 crate 注册表与 git 依赖缓存。
+    match:
+      path_globs:
+        - '**\.cargo\registry\**'
+        - '**\.cargo\git\**'
+
+  - id: tool.gradle
+    name: Gradle 缓存
+    category: toolchain
+    confidence: high
+    description: Gradle 的依赖与构建缓存，可由 Gradle 按需重新生成。
+    match:
+      path_globs:
+        - '**\.gradle\caches\**'
+
+  - id: tool.maven
+    name: Maven 仓库
+    category: toolchain
+    confidence: high
+    description: Maven 本地仓库中的依赖构件。
+    match:
+      path_globs:
+        - '**\.m2\repository\**'
+
+  - id: tool.rustup
+    name: Rust 工具链
+    category: toolchain
+    confidence: medium
+    description: rustup 安装的工具链与组件，不是缓存但占用稳定空间。
+    match:
+      path_globs:
+        - '**\.rustup\toolchains\**'
+
+  - id: tool.huggingface
+    name: Hugging Face 模型缓存
+    category: toolchain
+    confidence: high
+    description: Hugging Face 下载的模型与数据集缓存。
+    match:
+      path_globs:
+        - '**\.cache\huggingface\**'
+
+  - id: tool.torch
+    name: PyTorch 缓存
+    category: toolchain
+    confidence: medium
+    description: PyTorch 扩展与编译缓存。
+    match:
+      path_globs:
+        - '**\.cache\torch\**'
+
+  - id: tool.ollama
+    name: Ollama 模型
+    category: toolchain
+    confidence: high
+    description: Ollama 下载的本地模型文件。
+    match:
+      path_globs:
+        - '**\.ollama\models\**'
+
+  - id: container.wsl
+    name: WSL 发行版磁盘
+    category: container
+    confidence: high
+    description: WSL 发行版的 ext4.vhdx 虚拟磁盘，只增不减是 WSL2 的已知行为。
+    match:
+      path_globs:
+        - '**\AppData\Local\Packages\**\LocalState\ext4.vhdx'
+        - '**\wsl\**\ext4.vhdx'
+        - '**\Docker\wsl\**\ext4.vhdx'
+
+  - id: container.docker
+    name: Docker 数据
+    category: container
+    confidence: high
+    description: Docker Desktop 的镜像、容器与卷数据。
+    match:
+      path_globs:
+        - '**\AppData\Local\Docker\**'
+        - '**\ProgramData\Docker\**'
+
+  - id: system.winsxs
+    name: WinSxS 组件存储
+    category: system
+    confidence: high
+    description: Windows 组件存储，由系统更新维护；不要手工删除，使用 DISM 分析。
+    match:
+      path_globs:
+        - '**\Windows\WinSxS\**'
+
+  - id: system.installer
+    name: Windows Installer 缓存
+    category: system
+    confidence: medium
+    description: MSI 安装缓存与补丁缓存，卸载或修复程序时可能仍被引用。
+    match:
+      path_globs:
+        - '**\Windows\Installer\**'
+
+  - id: system.windows-update
+    name: Windows 更新缓存
+    category: system
+    confidence: high
+    description: Windows Update 下载与分发缓存，更新完成后可由系统清理。
+    match:
+      path_globs:
+        - '**\Windows\SoftwareDistribution\**'
+
+  - id: system.prefetch
+    name: Prefetch
+    category: system
+    confidence: high
+    description: 启动预读文件，系统会自动维护。
+    match:
+      path_globs:
+        - '**\Windows\Prefetch\**'
+
+  - id: system.font-cache
+    name: 字体缓存
+    category: system
+    confidence: high
+    description: Windows 字体缓存，可自动重建。
+    match:
+      path_globs:
+        - '**\Windows\ServiceProfiles\LocalService\AppData\Local\FontCache\**'
+
+  - id: system.delivery-optimization
+    name: 传递优化缓存
+    category: system
+    confidence: high
+    description: Windows 传递优化的更新分发缓存，可在设置中清理。
+    match:
+      path_globs:
+        - '**\Windows\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\**'
+
+  - id: system.search-index
+    name: Windows 搜索索引
+    category: system
+    confidence: medium
+    description: Windows Search 索引数据库，可在索引选项中重建。
+    match:
+      path_globs:
+        - '**\ProgramData\Microsoft\Search\Data\**'
+
+  - id: system.volume-info
+    name: 系统卷信息
+    category: backup
+    confidence: medium
+    description: System Volume Information 中的卷影副本、还原点与索引数据；不要手工删除，使用系统工具管理。
+    match:
+      path_globs:
+        - '**\System Volume Information\**'
+
+  - id: system.windows-old
+    name: 旧版 Windows 备份
+    category: backup
+    confidence: high
+    description: 系统升级留下的 Windows.old，可在磁盘清理中删除。
+    match:
+      path_globs:
+        - '**\Windows.old\**'
+
+  - id: system.memory-files
+    name: 系统内存文件
+    category: system
+    confidence: high
+    description: 页面文件、休眠文件与交换文件，由系统管理，不要在资源管理器中删除。
+    match:
+      name_globs:
+        - 'pagefile.sys'
+        - 'hiberfil.sys'
+        - 'swapfile.sys'
+
+  - id: recycle.bin
+    name: 回收站
+    category: recycle
+    confidence: high
+    description: 各卷的回收站内容，由用户清空。
+    match:
+      path_globs:
+        - '**\$Recycle.Bin\**'
+
+  - id: security.defender-updates
+    name: Defender 定义更新
+    category: security
+    confidence: high
+    description: Microsoft Defender 的病毒定义更新缓存。
+    match:
+      path_globs:
+        - '**\ProgramData\Microsoft\Windows Defender\Definition Updates\**'
+
+  - id: security.defender-scans
+    name: Defender 扫描历史
+    category: security
+    confidence: high
+    description: Defender 的扫描记录、缓存与支持文件。
+    match:
+      path_globs:
+        - '**\ProgramData\Microsoft\Windows Defender\Scans\**'
+
+  - id: security.defender-quarantine
+    name: Defender 隔离区
+    category: security
+    confidence: high
+    description: 被 Defender 隔离的文件；不要手工删除，通过安全中心处理。
+    match:
+      path_globs:
+        - '**\ProgramData\Microsoft\Windows Defender\Quarantine\**'
+
+  - id: app.onedrive
+    name: OneDrive 缓存
+    category: app-cache
+    confidence: medium
+    description: OneDrive 同步缓存与日志；本地文件本身属于用户数据。
+    match:
+      path_globs:
+        - '**\AppData\Local\Microsoft\OneDrive\**'
+
+  - id: app.teams
+    name: Teams 缓存
+    category: app-cache
+    confidence: medium
+    description: Microsoft Teams 的缓存、日志与更新包。
+    match:
+      path_globs:
+        - '**\AppData\Roaming\Microsoft\Teams\**'
+
+  - id: app.discord
+    name: Discord 缓存
+    category: app-cache
+    confidence: high
+    description: Discord 的 HTTP 缓存与代码缓存。
+    match:
+      path_globs:
+        - '**\AppData\Roaming\discord\Cache\**'
+        - '**\AppData\Roaming\discord\Code Cache\**'
+        - '**\AppData\Roaming\discord\GPUCache\**'
+
+  - id: app.vscode
+    name: VS Code 缓存
+    category: app-cache
+    confidence: high
+    description: VS Code 的缓存、CachedData、GPU 缓存与日志。
+    match:
+      path_globs:
+        - '**\AppData\Roaming\Code\Cache\**'
+        - '**\AppData\Roaming\Code\CachedData\**'
+        - '**\AppData\Roaming\Code\GPUCache\**'
+        - '**\AppData\Roaming\Code\logs\**'
+
+  - id: app.jetbrains
+    name: JetBrains 缓存
+    category: app-cache
+    confidence: high
+    description: JetBrains IDE 的索引与编译缓存，可由 IDE 重建。
+    match:
+      path_globs:
+        - '**\AppData\Local\JetBrains\**\caches\**'
+        - '**\AppData\Local\JetBrains\**\log\**'
+
+  - id: app.office
+    name: Office 文档缓存
+    category: app-cache
+    confidence: high
+    description: Office 的文档缓存与临时文件。
+    match:
+      path_globs:
+        - '**\AppData\Local\Microsoft\Office\**\OfficeFileCache\**'
+
+  - id: app.wechat
+    name: 微信文件
+    category: app-data
+    confidence: high
+    description: 微信聊天附件与缓存；属于用户数据，清理前请确认。
+    match:
+      path_globs:
+        - '**\Documents\WeChat Files\**'
+        - '**\WeChat Files\**'
+
+  - id: app.qq
+    name: QQ 文件
+    category: app-data
+    confidence: high
+    description: QQ 聊天文件与缓存；属于用户数据，清理前请确认。
+    match:
+      path_globs:
+        - '**\Documents\Tencent Files\**'
+
+  - id: app.packages
+    name: 应用包缓存
+    category: app-cache
+    confidence: low
+    description: UWP/MSIX 应用的 LocalCache 与 TempState，按路径名推断。
+    match:
+      path_globs:
+        - '**\AppData\Local\Packages\**\LocalCache\**'
+        - '**\AppData\Local\Packages\**\TempState\**'
+
+  - id: app.generic-cache
+    name: 应用通用缓存
+    category: app-cache
+    confidence: low
+    description: AppData 下名为 Cache、Code Cache 或 GPUCache 的目录，按路径名推断。
+    match:
+      path_globs:
+        - '**\AppData\Local\**\Cache\**'
+        - '**\AppData\Roaming\**\Cache\**'
+        - '**\AppData\Local\**\Code Cache\**'
+        - '**\AppData\Local\**\GPUCache\**'
+
+  - id: dev.node-modules
+    name: node_modules
+    category: dev
+    confidence: high
+    description: JavaScript 项目依赖目录，可由包管理器重新安装；删除会影响离线构建。
+    match:
+      path_globs:
+        - '**\node_modules\**'
+
+  - id: dev.target-debug
+    name: Rust debug 产物
+    category: dev
+    confidence: high
+    description: Cargo 的 debug 构建产物，可由 cargo build 重建。
+    match:
+      path_globs:
+        - '**\target\debug\**'
+
+  - id: dev.target-release
+    name: Rust release 产物
+    category: dev
+    confidence: high
+    description: Cargo 的 release 构建产物，可由 cargo build --release 重建。
+    match:
+      path_globs:
+        - '**\target\release\**'
+
+  - id: games.steam
+    name: Steam 游戏
+    category: games
+    confidence: high
+    description: Steam 已安装游戏、下载缓存与创意工坊内容。
+    match:
+      path_globs:
+        - '**\steamapps\common\**'
+        - '**\steamapps\downloading\**'
+        - '**\steamapps\workshop\**'
+
+  - id: games.epic
+    name: Epic 游戏
+    category: games
+    confidence: medium
+    description: Epic Games 安装目录。
+    match:
+      path_globs:
+        - '**\Epic Games\**'
+
+  - id: images.vm
+    name: 虚拟磁盘镜像
+    category: images
+    confidence: low
+    description: 以 .vhdx、.vhd、.vmdk 或 .qcow2 结尾的虚拟磁盘，按扩展名推断。
+    match:
+      name_globs:
+        - '*.vhdx'
+        - '*.vhd'
+        - '*.vmdk'
+        - '*.qcow2'
+
+  - id: images.iso
+    name: ISO 镜像
+    category: images
+    confidence: low
+    description: 以 .iso 结尾的光盘镜像文件，按扩展名推断。
+    match:
+      name_globs:
+        - '*.iso'
+
+  - id: database.app
+    name: 应用数据库
+    category: database
+    confidence: medium
+    description: SQLite 数据库及其 WAL/SHM 文件，属于应用数据；数据库增长通常意味着业务数据增加。
+    match:
+      name_globs:
+        - '*.db'
+        - '*.sqlite'
+        - '*.sqlite3'
+        - '*.db-wal'
+        - '*.db-shm'
+        - '*.sqlite-wal'
+        - '*.sqlite-shm'
+
+  - id: user.downloads
+    name: 下载目录
+    category: user-content
+    confidence: high
+    description: 用户下载目录；属于用户文件，只解释增长，不提供清理建议。
+    match:
+      path_globs:
+        - '**\Downloads\**'
