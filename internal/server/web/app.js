@@ -992,8 +992,11 @@ async function viewExplorer(root, params) {
     })));
   grid.appendChild(pd);
 
-  const pf = panel("文件", fmtCount(listing.files_total) + " 个" +
-    (listing.files_truncated ? "（显示前 " + listing.files.length + "）" : ""));
+  const fileHint = listing.files_expired
+    ? "文件明细已按保留策略清理，仅保留目录聚合"
+    : fmtCount(listing.files_total) + " 个" +
+      (listing.files_truncated ? "（显示前 " + listing.files.length + "）" : "");
+  const pf = panel("文件", fileHint);
   pf.appendChild(dataTable(
     [{ label: "名称" }, { label: "实占", num: true }, { label: "逻辑", num: true }, { label: "修改时间" }],
     listing.files.map((f) => [td(f.name, "path"), td(fmtBytes(f.alloc_size), "num"),
@@ -1233,9 +1236,11 @@ function configPanel(cfg) {
     [
       [td("每日快照", "dim"), td(ret.daily_snapshots_days + " 天")],
       [td("每周快照", "dim"), td(ret.weekly_snapshots_days + " 天")],
+      [td("日快照文件", "dim"), td(ret.daily_file_days + " 天")],
+      [td("周快照文件", "dim"), td(ret.weekly_file_weeks + " 周")],
       [td("每日汇总", "dim"), td(ret.daily_summary_days + " 天")],
       [td("文件事件", "dim"), td(ret.file_events_days + " 天")],
-      [td("自动清理", "dim"), td(ret.auto_prune ? "开启（随每周任务）" : "关闭",
+      [td("自动清理", "dim"), td(ret.auto_prune ? "开启（随维护任务）" : "关闭",
         ret.auto_prune ? "warn" : "dim")],
     ]));
   grid.appendChild(pr);

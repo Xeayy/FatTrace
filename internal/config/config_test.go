@@ -19,6 +19,9 @@ func TestDefaultsValidate(t *testing.T) {
 	if cfg.Retention.AutoPrune {
 		t.Fatal("auto_prune must default to false")
 	}
+	if cfg.Retention.DailyFileDays != 7 || cfg.Retention.WeeklyFileWeeks != 3 {
+		t.Fatalf("file retention defaults = %d days / %d weeks", cfg.Retention.DailyFileDays, cfg.Retention.WeeklyFileWeeks)
+	}
 }
 
 func TestValidateRootsTrimDedupeClean(t *testing.T) {
@@ -49,6 +52,8 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		{"weekly day", func(c *Config) { c.Schedule.WeeklyAt = "Funday 03:00" }},
 		{"weekly format", func(c *Config) { c.Schedule.WeeklyAt = "Sun" }},
 		{"negative retention", func(c *Config) { c.Retention.DailySummaryDays = -1 }},
+		{"negative daily file retention", func(c *Config) { c.Retention.DailyFileDays = -1 }},
+		{"negative weekly file retention", func(c *Config) { c.Retention.WeeklyFileWeeks = -1 }},
 		{"negative alert", func(c *Config) { c.Alerts.SilenceHours = -1 }},
 	}
 	for _, tc := range cases {
@@ -132,6 +137,9 @@ func TestTemplateIsLoadable(t *testing.T) {
 	}
 	if cfg.Schedule.WeeklyAt != "Sun 04:00" {
 		t.Fatalf("template weekly = %q", cfg.Schedule.WeeklyAt)
+	}
+	if cfg.Retention.DailyFileDays != 7 || cfg.Retention.WeeklyFileWeeks != 3 {
+		t.Fatalf("template file retention = %d / %d", cfg.Retention.DailyFileDays, cfg.Retention.WeeklyFileWeeks)
 	}
 }
 

@@ -40,11 +40,16 @@ type Schedule struct {
 // Retention sets how long FatTrace keeps its own history. It never applies to
 // scanned files.
 type Retention struct {
-	DailySnapshotsDays  int  `yaml:"daily_snapshots_days" json:"daily_snapshots_days"`
-	WeeklySnapshotsDays int  `yaml:"weekly_snapshots_days" json:"weekly_snapshots_days"`
-	DailySummaryDays    int  `yaml:"daily_summary_days" json:"daily_summary_days"`
-	FileEventsDays      int  `yaml:"file_events_days" json:"file_events_days"`
-	AutoPrune           bool `yaml:"auto_prune" json:"auto_prune"`
+	DailySnapshotsDays  int `yaml:"daily_snapshots_days" json:"daily_snapshots_days"`
+	WeeklySnapshotsDays int `yaml:"weekly_snapshots_days" json:"weekly_snapshots_days"`
+	// DailyFileDays and WeeklyFileWeeks control how long snap_files rows are
+	// kept. Snapshots and snap_dirs stay for the longer snapshot retention, so
+	// old points remain browsable at directory level without the full file list.
+	DailyFileDays    int  `yaml:"daily_file_days" json:"daily_file_days"`
+	WeeklyFileWeeks  int  `yaml:"weekly_file_weeks" json:"weekly_file_weeks"`
+	DailySummaryDays int  `yaml:"daily_summary_days" json:"daily_summary_days"`
+	FileEventsDays   int  `yaml:"file_events_days" json:"file_events_days"`
+	AutoPrune        bool `yaml:"auto_prune" json:"auto_prune"`
 }
 
 // Alerts configures growth warnings. A zero threshold disables that dimension.
@@ -66,6 +71,8 @@ func Defaults() Config {
 		Retention: Retention{
 			DailySnapshotsDays:  30,
 			WeeklySnapshotsDays: 365,
+			DailyFileDays:       7,
+			WeeklyFileWeeks:     3,
 			DailySummaryDays:    90,
 			FileEventsDays:      56,
 			AutoPrune:           false,
@@ -146,6 +153,7 @@ func (c *Config) Validate() error {
 	c.Schedule.Roots = roots
 
 	if c.Retention.DailySnapshotsDays < 0 || c.Retention.WeeklySnapshotsDays < 0 ||
+		c.Retention.DailyFileDays < 0 || c.Retention.WeeklyFileWeeks < 0 ||
 		c.Retention.DailySummaryDays < 0 || c.Retention.FileEventsDays < 0 {
 		return errors.New("retention values must be >= 0")
 	}
@@ -277,9 +285,11 @@ func Template(roots []string) string {
 	b.WriteString("retention:\n")
 	b.WriteString("  daily_snapshots_days: 30\n")
 	b.WriteString("  weekly_snapshots_days: 365\n")
+	b.WriteString("  daily_file_days: 7    # daily snap_files rows; 0 disables file-row pruning\n")
+	b.WriteString("  weekly_file_weeks: 3  # weekly snap_files rows; directories stay longer\n")
 	b.WriteString("  daily_summary_days: 90\n")
 	b.WriteString("  file_events_days: 56\n")
-	b.WriteString("  auto_prune: false     # weekly maintain deletes expired history when true\n\n")
+	b.WriteString("  auto_prune: false     # maintain tasks delete expired history when true\n\n")
 	b.WriteString("alerts:\n")
 	b.WriteString("  growth_bytes: 5368709120  # per-day net growth threshold; 0 disables\n")
 	b.WriteString("  growth_pct: 5             # percent of used space; 0 disables\n")

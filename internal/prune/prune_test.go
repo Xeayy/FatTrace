@@ -211,6 +211,84 @@ func TestRunDryRunThenApply(t *testing.T) {
 	}
 }
 
+func TestFileRowRetentionKeepsSnapshotsAndDirs(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	vol, err := f.st.EnsureVolume(ctx, 0xC3, "NTFS", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.Local)
+	days := func(n int) time.Time { return now.AddDate(0, 0, -n) }
+
+	dailyOld := f.snapshot(t, vol, "daily", "complete", days(40))
+	dailyExpired := f.snapshot(t, vol, "daily", "complete", days(11))
+	dailySecond := f.snapshot(t, vol, "daily", "complete", days(10))
+	dailyNewest := f.snapshot(t, vol, "daily", "complete", days(9))
+	weeklyOld := f.snapshot(t, vol, "weekly", "complete", days(60))
+	weeklySecond := f.snapshot(t, vol, "weekly", "complete", days(30))
+	weeklyNewest := f.snapshot(t, vol, "weekly", "complete", days(2))
+	manualOld := f.snapshot(t, vol, "manual", "complete", days(100))
+
+	cfg := config.Retention{
+		DailySnapshotsDays: 90, WeeklySnapshotsDays: 365,
+		DailyFileDays: 7, WeeklyFileWeeks: 3,
+		DailySummaryDays: 90, FileEventsDays: 56,
+	}
+	rep, err := Run(ctx, f.st, cfg, false, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Snapshots) != 0 {
+		t.Fatalf("full-snapshot candidates = %+v, want none", rep.Snapshots)
+	}
+	want := map[int64]bool{dailyOld: true, dailyExpired: true, weeklyOld: true}
+	if len(rep.FileSnapshotIDs) != len(want) {
+		t.Fatalf("file candidates = %v, want %v", rep.FileSnapshotIDs, want)
+	}
+	for _, id := range rep.FileSnapshotIDs {
+		if !want[id] {
+			t.Fatalf("unexpected file candidate #%d", id)
+		}
+		delete(want, id)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing file candidates: %v", want)
+	}
+	if rep.FileRows != 3 || rep.Deleted.FileRows != 0 {
+		t.Fatalf("dry-run file rows = planned %d deleted %d", rep.FileRows, rep.Deleted.FileRows)
+	}
+	for _, id := range []int64{dailyOld, dailyExpired, weeklyOld} {
+		if n := f.count(t, `SELECT COUNT(*) FROM snap_files WHERE snapshot_id = ?`, id); n != 1 {
+			t.Fatalf("dry run removed file rows of #%d", id)
+		}
+	}
+
+	rep, err = Run(ctx, f.st, cfg, true, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Deleted.FileRows != 3 || rep.Deleted.Snapshots != 0 {
+		t.Fatalf("applied deletions = %+v", rep.Deleted)
+	}
+	for _, id := range []int64{dailyOld, dailyExpired, weeklyOld} {
+		if n := f.count(t, `SELECT COUNT(*) FROM snap_files WHERE snapshot_id = ?`, id); n != 0 {
+			t.Fatalf("snap_files of #%d survived", id)
+		}
+		if n := f.count(t, `SELECT COUNT(*) FROM snapshots WHERE id = ?`, id); n != 1 {
+			t.Fatalf("snapshot #%d was removed", id)
+		}
+		if n := f.count(t, `SELECT COUNT(*) FROM snap_dirs WHERE snapshot_id = ?`, id); n != 1 {
+			t.Fatalf("snap_dirs of #%d = %d, want 1", id, n)
+		}
+	}
+	for _, id := range []int64{dailySecond, dailyNewest, weeklySecond, weeklyNewest, manualOld} {
+		if n := f.count(t, `SELECT COUNT(*) FROM snap_files WHERE snapshot_id = ?`, id); n != 1 {
+			t.Fatalf("protected snapshot #%d lost file rows", id)
+		}
+	}
+}
+
 func TestZeroRetentionDisablesDimensions(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()

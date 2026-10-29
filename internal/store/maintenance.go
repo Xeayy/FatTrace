@@ -285,6 +285,135 @@ func (s *Store) PruneSnapshotCandidates(ctx context.Context, dailyBefore, weekly
 	return out, nil
 }
 
+// SnapshotFilePruneCandidates returns complete daily/weekly snapshots whose
+// file rows are older than the cutoffs. The newest two complete snapshots of
+// every volume/root/kind group are protected so default diff pairing and weekly
+// reports keep working; manual snapshots are never candidates. A zero cutoff
+// disables that kind.
+func (s *Store) SnapshotFilePruneCandidates(ctx context.Context, dailyBefore, weeklyBefore int64) ([]SnapshotInfo, error) {
+	rows, err := s.db.QueryContext(ctx, snapshotSelectSQL+` ORDER BY started_at, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var all []SnapshotInfo
+	for rows.Next() {
+		sn, err := scanSnapshotInfo(rows)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, sn)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	groupKey := func(sn SnapshotInfo) string {
+		return fmt.Sprintf("%d|%s|%s", sn.VolumeID, strings.ToLower(sn.Root), sn.Kind)
+	}
+	groups := make(map[string][]SnapshotInfo)
+	for _, sn := range all {
+		if sn.Status == "complete" {
+			groups[groupKey(sn)] = append(groups[groupKey(sn)], sn)
+		}
+	}
+	protected := make(map[int64]bool)
+	for _, list := range groups {
+		for i := len(list) - 1; i >= 0 && i >= len(list)-2; i-- {
+			protected[list[i].ID] = true
+		}
+	}
+
+	var out []SnapshotInfo
+	for _, sn := range all {
+		if sn.Status != "complete" || protected[sn.ID] {
+			continue
+		}
+		switch sn.Kind {
+		case "daily":
+			if dailyBefore > 0 && sn.StartedAt < dailyBefore {
+				out = append(out, sn)
+			}
+		case "weekly":
+			if weeklyBefore > 0 && sn.StartedAt < weeklyBefore {
+				out = append(out, sn)
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].StartedAt < out[j].StartedAt })
+	return out, nil
+}
+
+// CountSnapshotFiles counts snap_files rows for the given snapshots.
+func (s *Store) CountSnapshotFiles(ctx context.Context, ids []int64) (int64, error) {
+	var total int64
+	const batch = 400
+	for start := 0; start < len(ids); start += batch {
+		end := start + batch
+		if end > len(ids) {
+			end = len(ids)
+		}
+		part := ids[start:end]
+		args := make([]any, len(part))
+		for i, id := range part {
+			args[i] = id
+		}
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(part)), ",")
+		var n int64
+		if err := s.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM snap_files WHERE snapshot_id IN (`+placeholders+`)`,
+			args...).Scan(&n); err != nil {
+			return 0, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+// DeleteSnapshotFiles removes only the file-level rows of the given snapshots.
+// The snapshot metadata, directory aggregates and daily summaries stay intact.
+func (s *Store) DeleteSnapshotFiles(ctx context.Context, ids []int64) (int64, error) {
+	if err := s.requireWriter(); err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	var deleted int64
+	const batch = 400
+	for start := 0; start < len(ids); start += batch {
+		end := start + batch
+		if end > len(ids) {
+			end = len(ids)
+		}
+		part := ids[start:end]
+		args := make([]any, len(part))
+		for i, id := range part {
+			args[i] = id
+		}
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(part)), ",")
+		res, err := tx.ExecContext(ctx,
+			`DELETE FROM snap_files WHERE snapshot_id IN (`+placeholders+`)`, args...)
+		if err != nil {
+			return 0, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return 0, err
+		}
+		deleted += n
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return deleted, nil
+}
+
 // DeleteSnapshots removes snapshots and everything cascading from them. It only
 // touches FatTrace's own history tables.
 func (s *Store) DeleteSnapshots(ctx context.Context, ids []int64) (int64, error) {
