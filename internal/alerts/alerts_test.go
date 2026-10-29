@@ -153,7 +153,7 @@ func TestThresholdDimensions(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if tc.cfg.GrowthBytes == 0 && tc.cfg.GrowthPct == 0 {
+			if tc.cfg.GrowthBytes == 0 && tc.cfg.GrowthPct == 0 && tc.cfg.GrowthMultiple == 0 {
 				if len(rep.Alerts) != 0 {
 					t.Fatalf("disabled alerts returned %+v", rep.Alerts)
 				}
@@ -174,6 +174,87 @@ func TestThresholdDimensions(t *testing.T) {
 	}
 	if len(rep.Alerts) != 0 {
 		t.Fatalf("zero thresholds returned %+v", rep.Alerts)
+	}
+}
+
+func TestGrowthMultiple(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	vol, err := st.EnsureVolume(ctx, 0xA5, "NTFS", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for day := 20; day <= 28; day++ {
+		seedDay(t, st, vol, "2026-10-"+itoa(int64(day)), 100*mib, mib)
+	}
+	seedDay(t, st, vol, "2026-10-29", 110*mib, 10*mib)
+	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.Local)
+
+	cfg := config.Alerts{GrowthMultiple: 5, GrowthMultipleFloorBytes: 0, SilenceHours: 1}
+	rep, err := Evaluate(ctx, st, cfg, Options{Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Alerts) != 1 {
+		t.Fatalf("alerts = %+v", rep.Alerts)
+	}
+	a := rep.Alerts[0]
+	if !a.Triggered || a.ThresholdMultiple != 5 || a.BaselineBytes != mib || a.Multiple != 10 {
+		t.Fatalf("multiple alert = %+v", a)
+	}
+	if !strings.Contains(a.Message, "10.0×") || !strings.Contains(a.Message, "1.00 MiB") {
+		t.Fatalf("multiple message = %q", a.Message)
+	}
+
+	cfg.GrowthMultiple = 20
+	rep, err = Evaluate(ctx, st, cfg, Options{Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Alerts[0].Triggered {
+		t.Fatalf("20x threshold fired at 10x: %+v", rep.Alerts[0])
+	}
+
+	cfg = config.Alerts{GrowthMultiple: 5, GrowthMultipleFloorBytes: 1 << 30, SilenceHours: 1}
+	rep, err = Evaluate(ctx, st, cfg, Options{Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Alerts[0].Triggered {
+		t.Fatalf("floor did not suppress a 10 MiB day: %+v", rep.Alerts[0])
+	}
+
+	short := testStore(t)
+	vol2, err := short.EnsureVolume(ctx, 0xA6, "NTFS", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedDay(t, short, vol2, "2026-10-27", 100*mib, mib)
+	seedDay(t, short, vol2, "2026-10-28", 101*mib, mib)
+	seedDay(t, short, vol2, "2026-10-29", 111*mib, 10*mib)
+	rep, err = Evaluate(ctx, short, config.Alerts{GrowthMultiple: 2}, Options{Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Alerts[0].Triggered {
+		t.Fatalf("multiple fired with only two baseline days: %+v", rep.Alerts[0])
+	}
+
+	old := testStore(t)
+	vol3, err := old.EnsureVolume(ctx, 0xA7, "NTFS", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for day := 1; day <= 3; day++ {
+		seedDay(t, old, vol3, "2026-09-0"+itoa(int64(day)), 100*mib, mib)
+	}
+	seedDay(t, old, vol3, "2026-10-29", 110*mib, 10*mib)
+	rep, err = Evaluate(ctx, old, config.Alerts{GrowthMultiple: 2}, Options{Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Alerts[0].Triggered {
+		t.Fatalf("multiple used history outside the 14-day window: %+v", rep.Alerts[0])
 	}
 }
 

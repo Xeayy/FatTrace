@@ -132,6 +132,8 @@
   }
   .check-table .k { color: var(--muted); }
   footer { color: var(--muted); font-size: 12px; margin-top: 24px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .export-warning { margin-top: 24px; padding: 10px 12px; border-left: 3px solid var(--warn); color: var(--warn);
+    background: rgba(210, 153, 34, 0.08); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -184,6 +186,11 @@
   <div class="panel wide"><h2>扫描错误 <span class="note">来自 to 快照</span></h2><div id="errors"></div></div>
   <div class="panel wide"><h2>校验与警告</h2><div id="warnings"></div></div>
 </section>
+
+<div class="export-warning">
+  分享前请留意：本报告包含完整的文件/目录路径、大小和增长明细。发送给他人或上传到外部服务前，
+  请确认其中没有账号名、项目名、客户名等敏感信息；FatTrace 不会自动上传任何内容。
+</div>
 
 <footer>
   单文件离线报告，无外部请求 · FatTrace · <span id="generated"></span>

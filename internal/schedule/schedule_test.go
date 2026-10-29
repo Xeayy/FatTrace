@@ -19,6 +19,7 @@ func testOptions(t *testing.T) Options {
 		Roots:    []string{`D:\`},
 		DailyAt:  "03:00",
 		WeeklyAt: "Sun 04:00",
+		ACOnly:   true,
 		Now:      time.Date(2026, 10, 29, 10, 0, 0, 0, time.Local),
 	}
 }
@@ -114,6 +115,10 @@ func TestMarshalDailyXML(t *testing.T) {
 		!strings.Contains(text, "<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>") {
 		t.Fatal("missing settings")
 	}
+	if !strings.Contains(text, "<DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries>") ||
+		!strings.Contains(text, "<StopIfGoingOnBatteries>true</StopIfGoingOnBatteries>") {
+		t.Fatal("AC-only default did not reach the XML")
+	}
 	settings := text[strings.Index(text, "<Settings>"):strings.Index(text, "</Settings>")]
 	order := []string{
 		"<MultipleInstancesPolicy>", "<DisallowStartIfOnBatteries>", "<StopIfGoingOnBatteries>",
@@ -160,6 +165,80 @@ func TestMarshalWeeklyXML(t *testing.T) {
 	week := text[strings.Index(text, "<ScheduleByWeek>"):strings.Index(text, "</ScheduleByWeek>")]
 	if strings.Contains(week, "<Monday>") {
 		t.Fatalf("weekly trigger lists an extra weekday: %s", week)
+	}
+}
+
+func TestACOnlyDisabled(t *testing.T) {
+	opts := testOptions(t)
+	opts.ACOnly = false
+	tasks, err := Build(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := tasks[0].marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := decodeUTF16LE(t, data)
+	if !strings.Contains(text, "<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>") ||
+		!strings.Contains(text, "<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>") {
+		t.Fatal("ac_only=false did not reach the XML")
+	}
+}
+
+const registeredSample = `<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Triggers><CalendarTrigger><StartBoundary>2026-10-30T03:00:00</StartBoundary></CalendarTrigger></Triggers>
+  <Principals><Principal id="Author"><UserId>PC\alice</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <Enabled>true</Enabled>
+    <Hidden>true</Hidden>
+  </Settings>
+  <Actions Context="Author"><Exec><Command>C:\Tools\fat.exe</Command><Arguments>maintain --kind daily</Arguments></Exec></Actions>
+</Task>`
+
+func TestParseRegisteredASCII(t *testing.T) {
+	r, err := parseRegistered([]byte(registeredSample))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.Enabled || !r.StartWhenAvailable || !r.DisallowStartIfOnBatteries || !r.Hidden {
+		t.Fatalf("settings = %+v", r)
+	}
+	if r.RunLevel != "LeastPrivilege" || r.LogonType != "InteractiveToken" {
+		t.Fatalf("principal = %+v", r)
+	}
+	if r.StartBoundary != "2026-10-30T03:00:00" {
+		t.Fatalf("start boundary = %q", r.StartBoundary)
+	}
+	if r.Command != `C:\Tools\fat.exe` || r.Arguments != "maintain --kind daily" {
+		t.Fatalf("action = %q %q", r.Command, r.Arguments)
+	}
+}
+
+func TestParseRegisteredUTF16(t *testing.T) {
+	r, err := parseRegistered(utf16LE(registeredSample))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Command != `C:\Tools\fat.exe` || !r.DisallowStartIfOnBatteries {
+		t.Fatalf("utf16 parse = %+v", r)
+	}
+}
+
+func TestParseRegisteredDefaults(t *testing.T) {
+	xml := `<Task><Settings><Enabled>false</Enabled></Settings></Task>`
+	r, err := parseRegistered([]byte(xml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Enabled {
+		t.Fatal("explicit Enabled=false was ignored")
+	}
+	if r.RunLevel != "LeastPrivilege" || r.LogonType != "InteractiveToken" {
+		t.Fatalf("defaults = %+v", r)
 	}
 }
 

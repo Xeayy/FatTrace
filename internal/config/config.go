@@ -35,6 +35,9 @@ type Schedule struct {
 	Roots    []string `yaml:"roots" json:"roots"`
 	DailyAt  string   `yaml:"daily_at" json:"daily_at"`
 	WeeklyAt string   `yaml:"weekly_at" json:"weekly_at"`
+	// ACOnly keeps scans off battery power: planned runs wait until the
+	// machine is plugged in. Manual fat snap is never affected.
+	ACOnly bool `yaml:"ac_only" json:"ac_only"`
 }
 
 // Retention sets how long FatTrace keeps its own history. It never applies to
@@ -54,9 +57,15 @@ type Retention struct {
 
 // Alerts configures growth warnings. A zero threshold disables that dimension.
 type Alerts struct {
-	GrowthBytes  int64   `yaml:"growth_bytes" json:"growth_bytes"`
-	GrowthPct    float64 `yaml:"growth_pct" json:"growth_pct"`
-	SilenceHours float64 `yaml:"silence_hours" json:"silence_hours"`
+	GrowthBytes int64   `yaml:"growth_bytes" json:"growth_bytes"`
+	GrowthPct   float64 `yaml:"growth_pct" json:"growth_pct"`
+	// GrowthMultiple flags a spike relative to the median positive net growth
+	// of the previous up to 14 days. It stays disabled at 0.
+	GrowthMultiple float64 `yaml:"growth_multiple" json:"growth_multiple"`
+	// GrowthMultipleFloorBytes prevents tiny baselines from producing noisy
+	// multiples; the day must also grow by at least this much.
+	GrowthMultipleFloorBytes int64   `yaml:"growth_multiple_floor_bytes" json:"growth_multiple_floor_bytes"`
+	SilenceHours             float64 `yaml:"silence_hours" json:"silence_hours"`
 }
 
 // Defaults returns the built-in configuration. Roots stay empty: scans are
@@ -67,6 +76,7 @@ func Defaults() Config {
 			Roots:    []string{},
 			DailyAt:  "03:00",
 			WeeklyAt: "Sun 04:00",
+			ACOnly:   true,
 		},
 		Retention: Retention{
 			DailySnapshotsDays:  30,
@@ -78,9 +88,11 @@ func Defaults() Config {
 			AutoPrune:           false,
 		},
 		Alerts: Alerts{
-			GrowthBytes:  5 << 30,
-			GrowthPct:    5,
-			SilenceHours: 24,
+			GrowthBytes:              5 << 30,
+			GrowthPct:                5,
+			GrowthMultiple:           0,
+			GrowthMultipleFloorBytes: 1 << 30,
+			SilenceHours:             24,
 		},
 	}
 }
@@ -157,7 +169,9 @@ func (c *Config) Validate() error {
 		c.Retention.DailySummaryDays < 0 || c.Retention.FileEventsDays < 0 {
 		return errors.New("retention values must be >= 0")
 	}
-	if c.Alerts.GrowthBytes < 0 || c.Alerts.GrowthPct < 0 || c.Alerts.SilenceHours < 0 {
+	if c.Alerts.GrowthBytes < 0 || c.Alerts.GrowthPct < 0 ||
+		c.Alerts.GrowthMultiple < 0 || c.Alerts.GrowthMultipleFloorBytes < 0 ||
+		c.Alerts.SilenceHours < 0 {
 		return errors.New("alerts values must be >= 0")
 	}
 	return nil
@@ -281,7 +295,8 @@ func Template(roots []string) string {
 		}
 	}
 	b.WriteString("  daily_at: \"03:00\"    # daily snapshot time (HH:MM, local)\n")
-	b.WriteString("  weekly_at: \"Sun 04:00\"  # weekly snapshot time (weekday HH:MM, local)\n\n")
+	b.WriteString("  weekly_at: \"Sun 04:00\"  # weekly snapshot time (weekday HH:MM, local)\n")
+	b.WriteString("  ac_only: true         # scheduled scans wait for AC power; manual snap is unaffected\n\n")
 	b.WriteString("retention:\n")
 	b.WriteString("  daily_snapshots_days: 30\n")
 	b.WriteString("  weekly_snapshots_days: 365\n")
@@ -293,6 +308,8 @@ func Template(roots []string) string {
 	b.WriteString("alerts:\n")
 	b.WriteString("  growth_bytes: 5368709120  # per-day net growth threshold; 0 disables\n")
 	b.WriteString("  growth_pct: 5             # percent of used space; 0 disables\n")
+	b.WriteString("  growth_multiple: 0        # spike vs median of prior 14 days; 0 disables\n")
+	b.WriteString("  growth_multiple_floor_bytes: 1073741824  # ignore multiples below this growth\n")
 	b.WriteString("  silence_hours: 24         # suppress repeats for this long after firing\n")
 	return b.String()
 }

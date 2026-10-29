@@ -171,6 +171,16 @@ func (s *Store) Close() error {
 
 func (s *Store) Path() string { return s.path }
 
+// QuickCheck runs SQLite's quick integrity check. Any result other than "ok"
+// means the database file is damaged or unreadable.
+func (s *Store) QuickCheck(ctx context.Context) (string, error) {
+	var result string
+	if err := s.db.QueryRowContext(ctx, "PRAGMA quick_check").Scan(&result); err != nil {
+		return "", err
+	}
+	return result, nil
+}
+
 func (s *Store) SchemaVersion(ctx context.Context) (int, error) {
 	var v int
 	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {

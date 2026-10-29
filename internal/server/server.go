@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -201,6 +203,17 @@ func (s *Server) serveAsset(name string) http.HandlerFunc {
 
 func withHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Reject DNS rebinding and cross-site requests before serving anything.
+		// The token still protects the API, but a foreign Host must never be
+		// treated as this local server.
+		if !validHost(r.Host) {
+			writeError(w, http.StatusMisdirectedRequest, "invalid Host header")
+			return
+		}
+		if origin := r.Header.Get("Origin"); origin != "" && !sameOrigin(origin, r.Host) {
+			writeError(w, http.StatusForbidden, "cross-origin request denied")
+			return
+		}
 		h := w.Header()
 		h.Set("Content-Security-Policy",
 			"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "+
@@ -208,8 +221,44 @@ func withHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Cache-Control", "no-store")
+		h.Set("Cross-Origin-Resource-Policy", "same-origin")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// validHost accepts only loopback names. It is intentionally strict: the
+// server binds to 127.0.0.1/[::1], so a foreign Host means DNS rebinding.
+func validHost(hostport string) bool {
+	host := hostport
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		host = h
+	}
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func sameOrigin(origin, hostport string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Scheme != "http" || u.Host == "" || u.User != nil {
+		return false
+	}
+	return strings.EqualFold(canonicalHostPort(u.Host), canonicalHostPort(hostport))
+}
+
+func canonicalHostPort(hostport string) string {
+	host, port, err := net.SplitHostPort(hostport)
+	if err != nil {
+		host, port = hostport, ""
+	}
+	host = strings.Trim(host, "[]")
+	if ip := net.ParseIP(host); ip != nil {
+		host = ip.String()
+	}
+	return strings.ToLower(host) + ":" + port
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

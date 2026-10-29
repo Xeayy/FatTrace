@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"fattrace/internal/config"
@@ -34,7 +35,7 @@ func Evaluate(ctx context.Context, st *store.Store, cfg config.Alerts, opts Opti
 	}
 	nowMS := opts.Now.UnixMilli()
 	rep := Report{CheckedAt: nowMS, Alerts: []model.Alert{}}
-	if cfg.GrowthBytes == 0 && cfg.GrowthPct == 0 {
+	if cfg.GrowthBytes == 0 && cfg.GrowthPct == 0 && cfg.GrowthMultiple == 0 {
 		return rep, nil
 	}
 	summaries, err := st.ListDailySummaries(ctx, 0, 1000)
@@ -51,10 +52,12 @@ func Evaluate(ctx context.Context, st *store.Store, cfg config.Alerts, opts Opti
 	}
 
 	latest := make(map[int64]model.DailySummary, 8)
+	history := make(map[int64][]model.DailySummary, 8)
 	for _, s := range summaries {
 		if _, ok := latest[s.VolumeID]; !ok {
 			latest[s.VolumeID] = s
 		}
+		history[s.VolumeID] = append(history[s.VolumeID], s)
 	}
 	silence := time.Duration(cfg.SilenceHours * float64(time.Hour))
 
@@ -64,8 +67,18 @@ func Evaluate(ctx context.Context, st *store.Store, cfg config.Alerts, opts Opti
 		if sum.UsedBytes > 0 {
 			pct = float64(value) / float64(sum.UsedBytes) * 100
 		}
+		baseline, samples := medianPriorGrowth(history[sum.VolumeID], sum.Day)
+		multiple := 0.0
+		if baseline > 0 && value > 0 {
+			multiple = float64(value) / float64(baseline)
+		}
+		multipleHit := cfg.GrowthMultiple > 0 && samples >= 3 &&
+			baseline >= 1<<20 && value > 0 &&
+			(cfg.GrowthMultipleFloorBytes == 0 || value >= cfg.GrowthMultipleFloorBytes) &&
+			multiple > cfg.GrowthMultiple
 		triggered := (cfg.GrowthBytes > 0 && value > cfg.GrowthBytes) ||
-			(cfg.GrowthPct > 0 && value > 0 && pct > cfg.GrowthPct)
+			(cfg.GrowthPct > 0 && value > 0 && pct > cfg.GrowthPct) ||
+			multipleHit
 		key := fmt.Sprintf("growth:%d", sum.VolumeID)
 		state := byKey[key]
 		state.Key = key
@@ -73,7 +86,8 @@ func Evaluate(ctx context.Context, st *store.Store, cfg config.Alerts, opts Opti
 			Key: key, VolumeID: sum.VolumeID, Root: sum.Root, Day: sum.Day,
 			Kind: "growth", ValueBytes: value, UsedBytes: sum.UsedBytes,
 			ThresholdBytes: cfg.GrowthBytes, ThresholdPct: cfg.GrowthPct,
-			Triggered: triggered, LastFiredAt: state.LastFiredAt,
+			ThresholdMultiple: cfg.GrowthMultiple, BaselineBytes: baseline,
+			Multiple: multiple, Triggered: triggered, LastFiredAt: state.LastFiredAt,
 			MutedUntil: state.MutedUntil, Hits: state.Hits,
 		}
 		a.Muted = triggered && state.MutedUntil > nowMS
@@ -90,7 +104,7 @@ func Evaluate(ctx context.Context, st *store.Store, cfg config.Alerts, opts Opti
 			state.LastValue = float64(value)
 		}
 		if triggered {
-			a.Message = alertMessage(sum, value, pct, cfg)
+			a.Message = alertMessage(sum, value, pct, multiple, baseline, samples, cfg)
 		}
 		if opts.Persist && (a.Fired || triggered) {
 			if err := st.SaveAlertState(ctx, state); err != nil {
@@ -103,22 +117,62 @@ func Evaluate(ctx context.Context, st *store.Store, cfg config.Alerts, opts Opti
 	return rep, nil
 }
 
-func alertMessage(sum model.DailySummary, value int64, pct float64, cfg config.Alerts) string {
+func alertMessage(sum model.DailySummary, value int64, pct, multiple float64,
+	baseline int64, samples int, cfg config.Alerts) string {
 	root := sum.Root
 	if root == "" {
 		root = fmt.Sprintf("卷 %d", sum.VolumeID)
 	}
 	msg := fmt.Sprintf("%s %s 净增长 %s", root, sum.Day, formatBytes(value))
-	switch {
-	case cfg.GrowthBytes > 0 && cfg.GrowthPct > 0:
-		msg += fmt.Sprintf("（阈值 %s / %.1f%%，实际 %.2f%%）",
-			formatBytes(cfg.GrowthBytes), cfg.GrowthPct, pct)
-	case cfg.GrowthBytes > 0:
-		msg += "（阈值 " + formatBytes(cfg.GrowthBytes) + "）"
-	default:
-		msg += fmt.Sprintf("（阈值 %.1f%%，实际 %.2f%%）", cfg.GrowthPct, pct)
+	var parts []string
+	if cfg.GrowthBytes > 0 && value > cfg.GrowthBytes {
+		parts = append(parts, "阈值 "+formatBytes(cfg.GrowthBytes))
+	}
+	if cfg.GrowthPct > 0 && value > 0 && pct > cfg.GrowthPct {
+		parts = append(parts, fmt.Sprintf("阈值 %.1f%%（实际 %.2f%%）", cfg.GrowthPct, pct))
+	}
+	if cfg.GrowthMultiple > 0 && samples >= 3 && baseline >= 1<<20 && value > 0 &&
+		(cfg.GrowthMultipleFloorBytes == 0 || value >= cfg.GrowthMultipleFloorBytes) &&
+		multiple > cfg.GrowthMultiple {
+		parts = append(parts, fmt.Sprintf("%.1f× 前 14 天正增长日中位 %s（阈值 %.1f×）",
+			multiple, formatBytes(baseline), cfg.GrowthMultiple))
+	}
+	if len(parts) > 0 {
+		msg += "（" + strings.Join(parts, "；") + "）"
 	}
 	return msg
+}
+
+// medianPriorGrowth returns the median positive net growth within the 14
+// calendar days before currentDay. Negative and zero days are ignored so
+// deletions do not lower the spike baseline; fewer than three samples means
+// "not enough history".
+func medianPriorGrowth(history []model.DailySummary, currentDay string) (int64, int) {
+	current, err := time.ParseInLocation("2006-01-02", currentDay, time.Local)
+	if err != nil {
+		return 0, 0
+	}
+	cutoff := current.AddDate(0, 0, -14)
+	vals := make([]int64, 0, 14)
+	for _, h := range history {
+		if h.DeltaBytes <= 0 {
+			continue
+		}
+		day, err := time.ParseInLocation("2006-01-02", h.Day, time.Local)
+		if err != nil || !day.Before(current) || day.Before(cutoff) {
+			continue
+		}
+		vals = append(vals, h.DeltaBytes)
+	}
+	if len(vals) == 0 {
+		return 0, 0
+	}
+	sort.Slice(vals, func(i, j int) bool { return vals[i] < vals[j] })
+	mid := len(vals) / 2
+	if len(vals)%2 == 1 {
+		return vals[mid], len(vals)
+	}
+	return (vals[mid-1] + vals[mid]) / 2, len(vals)
 }
 
 // SetMute writes a silence window for the given keys, creating state rows as

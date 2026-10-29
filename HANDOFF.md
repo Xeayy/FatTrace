@@ -1,7 +1,8 @@
 # FatTrace 项目交接文档
 
 - 更新时间：2026-10-29
-- 状态：**M0–M7b 已完成并推送**（M7 `2882f39`，M7b `5dd8bd6`）。计划任务已安装，正在积累真实一周样本（2026-10-29 首次计划运行成功，快照 #10）；“真实一周解释率 ≥70%”门禁待 2026-11-05 之后复核；首份真实周报预计 2026-11-08；14 天无人值守门禁待 2026-11-12 之后复核。
+- 状态：**M0–M7b 已完成并推送**（M7 `2882f39`，M7b `5dd8bd6`）；**M8a 非侵入式加固已完成代码与测试，尚未提交/推送**（等用户说“git”）。计划任务保持旧定义运行，正在积累真实一周样本（2026-10-29 首次计划运行成功，快照 #10）；“真实一周解释率 ≥70%”门禁待 2026-11-05 之后复核；首份真实周报预计 2026-11-08；14 天无人值守门禁待 2026-11-12 之后复核。
+- M8a 详情：`docs/m8a-results.md`。已加 doctor 自检、Host/Origin 校验、告警倍数阈值、导出泄露提示、AC-only 调度选项、README/SECURITY/CI/发布脚本；计划任务未重装，仍为 `LeastPrivilege` 且非 AC-only（doctor 会告警）。
 - 项目根目录：`D:\FatTraceDemo\FatTrace`
 
 ## 0. 项目一句话
@@ -36,7 +37,7 @@ cd /d/FatTraceDemo/FatTraceDemo/FatTrace
 FatTrace/
   go.mod                        module fattrace, go 1.27.0（modernc.org/sqlite v1.61.0）
   .gitignore
-  cmd/fat/main.go               CLI 入口：scan / snap / diff / report / serve / fileid / db / config / daily / alerts / prune / schedule / maintain / status / version
+  cmd/fat/main.go               CLI 入口：scan / snap / diff / report / serve / fileid / db / config / daily / alerts / prune / schedule / maintain / doctor / status / version
   cmd/fat/db.go                 CLI: db init / status
   cmd/fat/snap.go               CLI: snap（进度、Ctrl+C/Ctrl+Break、JSON）
   cmd/fat/diff.go               CLI: diff（配对、--week、Top-N、解释层、表格/JSON，只读连接）
@@ -58,11 +59,14 @@ FatTrace/
   internal/daily/daily.go       日汇总：日/周快照配对、解释率、Top 目录、Top 事件
   internal/daily/daily_test.go  2 个基线/窗口测试
   internal/alerts/alerts.go     告警阈值、沉默窗口、只读预览
-  internal/alerts/alerts_test.go 4 个触发/静默/预览/阈值测试
+  internal/alerts/alerts_test.go 5 个触发/静默/预览/倍数阈值测试
   internal/prune/prune.go       保留计划与执行（文件行降采样 + 快照/汇总/事件清理）
   internal/prune/prune_test.go  3 个 dry-run/apply/文件行保留测试
-  internal/schedule/schedule.go Task Scheduler XML（UTF-16）、安装/卸载/查询
-  internal/schedule/schedule_test.go 6 个 XML/参数/查询测试
+  internal/schedule/schedule.go Task Scheduler XML（UTF-16）、AC-only、安装/卸载/查询（解析已安装 XML）
+  internal/schedule/schedule_test.go 10 个 XML/参数/查询/AC-only 测试
+  internal/doctor/doctor.go     只读自检：配置/库/覆盖率/快照/规则/计划任务
+  internal/doctor/elevation_windows.go 当前进程令牌是否提权
+  internal/doctor/doctor_test.go 5 个自检测试
   internal/logfile/logfile.go   维护日志轮转（5 MiB × 3）
   internal/logfile/logfile_test.go 2 个轮转/重开测试
   cmd/fat/config.go             CLI: config init/show
@@ -97,7 +101,7 @@ FatTrace/
   internal/store/store_test.go / snapshot_test.go / browse_test.go  共 21 个 store 测试
   internal/server/server.go     只读 server：embed、路由、token 鉴权、安全头、规则集加载
   internal/server/api.go        /api/status|snapshots|diff|rules|dir|trend|config|daily|alerts + diff 结果缓存
-  internal/server/server_test.go API 鉴权/口径/缓存/错误映射/规则与解释测试
+  internal/server/server_test.go API 鉴权/口径/缓存/错误映射/规则与解释/Host+Origin 测试
   internal/server/maintenance_api_test.go /api/config|daily|alerts 测试（3 个）
   internal/server/latency_test.go 真实库 P95 门禁（需 FATTRACE_DB）
   internal/server/web/index.html SPA 外壳与导航
@@ -113,6 +117,12 @@ FatTrace/
   docs/m6-results.md            M6 实测记录（规则引擎、93.63% 解释率样本）
   docs/m7-results.md            M7 实测记录（配置、日汇总 99.37%、告警、保留、计划任务）
   docs/m7b-results.md           M7b 实测记录（文件行降采样、自动周报、滚动日志、过期 diff 提示）
+  docs/m8a-results.md           M8a 实测记录（doctor、Host/Origin、倍数告警、导出提示、AC-only、偏差）
+  README.md                     快速开始、命令表、配置、隐私、限制、排障
+  SECURITY.md                   安全边界、敏感数据、漏洞报告
+  .github/workflows/ci.yml      windows-latest: vet / test / build / doctor 冒烟
+  scripts/release.ps1           amd64/arm64 发布构建 + SHA256SUMS
+  cmd/fat/doctor.go             CLI: doctor（JSON/--strict/--skip-tasks）
 ```
 
 ### 已实现能力
@@ -211,6 +221,17 @@ FatTrace/
 - 实测（真实库副本）：1,954,128 文件行 → 删除 465,841 行（#9），snapshots 与 snap_dirs 不变，#10 与 400 天 manual 文件行完好；过期 #9 diff 明确报错；全量 30 天清理仍按预期级联目录与事件。独立小库验证首份周报 29,921 B、日志全阶段、自动 prune 删除 3 行文件明细、API `files_expired=true`。全量 **104 个测试**通过，`go vet` 通过。
 - 门禁：存储预算预计通过，待 2026-11-05 后首次真实文件行清理实测；首份真实周报 **2026-11-08**；真实一周解释率门禁 **2026-11-05 之后**；14 天无人值守 **2026-11-12 之后**。提交 `5dd8bd6`，细节见 `docs/m7b-results.md`。
 
+### M8a 已实现（非侵入式加固，未提交）
+
+- **doctor 自检**：`fat doctor [--json] [--skip-tasks] [--strict]`。只读 `OpenReader` + `quick_check` + `schtasks /Query`；检查配置、schema、库完整性、表/卷、磁盘余量、权限、快照新鲜度（>36h）、最新快照非 complete、卷根覆盖率 <95%、扫描错误、文件行已裁剪、规则加载、计划任务（缺失/禁用/不补跑/非 AC-only/二进制丢失/提权任务在 Program Files 外）。警告与失败都有可执行 hint；`--strict` 把警告当失败。
+- **server 防 DNS rebinding / 跨站**：`Host` 必须是 `localhost` 或回环 IP，否则 421；`Origin` 存在时必须同源，否则 403；无 CORS 允许头；新增 `Cross-Origin-Resource-Policy: same-origin`。保留 CSP、`no-store`、`nosniff`、`no-referrer` 与每会话 token。
+- **告警倍数阈值**：`alerts.growth_multiple`（默认 0，关闭）+ `growth_multiple_floor_bytes`（默认 1 GiB）。基准为前 14 天正增长日净 Δ 的中位数；至少 3 个样本、基准 ≥1 MiB、当日 >0、达到下限且严格超过阈值才触发。负增长日不计算倍数；CLI/SPA 显示阈值、基准、实际倍数，消息含中位数。
+- **导出泄露提示**：报告页脚顶部黄色提示“含完整路径/大小，分享前确认敏感信息”；`fat report` 终端也打印 sharing note。
+- **AC-only 调度**：`schedule.ac_only` 默认 true，XML `DisallowStartIfOnBatteries=true`；手动 `fat snap` 不受影响。`schtasks /Query /XML` 解析支持 UTF-16LE/UTF-8，`schedule status` 显示实际 run_level/ac_only/start 并对配置不一致告警。
+- **发布资料**：`README.md`、`SECURITY.md`、`.github/workflows/ci.yml`（windows-latest vet/test/build/doctor 冒烟）、`scripts/release.ps1`（amd64/arm64 + SHA256SUMS）。
+- **验证**：`go vet` 与 115 个 Test 全过；真实库 doctor `9 ok / 3 warn / 0 fail`（3 条警告为快照 3 个扫描错误 + 两个旧任务非 AC-only）；SPA 状态/规则页实浏览器冒烟通过；报告包含导出提示；release 脚本产出并验证 `version`。
+- **未做/偏差**：计划任务仍为 `LeastPrivilege`、未重装（AC-only 只对新安装生效）；无 Program Files 安装器/ACL 收紧/代码签名；CI 尚未在 GitHub 实跑。原因与关闭路径见 `docs/m8a-results.md`。
+
 ### 当前 CLI
 
 ```bash
@@ -238,9 +259,11 @@ FatTrace/
 ./fat.exe config show [--json]
 ./fat.exe daily                        # CLI 默认重算最近 14 天（maintain 内部用 3 天）
 ./fat.exe daily --days 0 --top 20      # 全量重算、每天 20 个 Top 目录
-./fat.exe alerts                       # 评估阈值并持久化触发/静默状态
+./fat.exe alerts                       # 评估阈值（绝对/占比/倍数）并持久化触发/静默状态
 ./fat.exe alerts --mute 24h            # 手工静默全部卷
 ./fat.exe alerts --unmute
+./fat.exe doctor                       # 只读自检；--json / --strict / --skip-tasks
+./fat.exe doctor --db "$DB" --strict   # 警告也返回非零，适合脚本门禁
 ./fat.exe prune                        # 默认 dry-run；输出快照 cutoff 与文件行 cutoff
 ./fat.exe prune --apply                # 只清理库内历史（含过期 snap_files），不动文件
 ./fat.exe schedule install --dry-run   # 只生成 XML、打印 schtasks 命令
@@ -462,9 +485,10 @@ FatTrace/
 
 ## 7. 风险与安全提醒
 
-- 计划任务提权时，二进制必须放 `%ProgramFiles%\FatTrace\` 并限制 ACL；配置/DB 放 `%LOCALAPPDATA%`，任务不能指向用户可写目录。当前实现默认**不提权**：`InteractiveToken + LeastPrivilege`，任务可见范围与手工 `fat snap` 相同。
-- 本地 server 仅绑 `127.0.0.1`，随机端口 + 每会话 token；快照含全盘路径，不云同步。
-- 删除类建议只给路径与预期收益，不自动执行。
+- 计划任务提权时，二进制必须放 `%ProgramFiles%\FatTrace\` 并限制 ACL；配置/DB 放 `%LOCALAPPDATA%`，任务不能指向用户可写目录。当前实现默认**不提权**：`InteractiveToken + LeastPrivilege`，任务可见范围与手工 `fat snap` 相同；M8a 未实现 Program Files 安装器/ACL 收紧，提权路径仍待后续确认与实现。
+- 本地 server 仅绑 `127.0.0.1`（启动时强制回环），随机端口 + 每会话 token；M8a 起校验 `Host` 只能为 localhost/回环 IP（421）与同源 `Origin`（403），无 CORS；快照含全盘路径，不云同步。
+- HTML 报告与 weekly 报告含完整路径，页脚已提示分享风险；`fat report` 终端也会提醒。报告/日志/DB 都按本地敏感数据对待。
+- `schedule.ac_only` 默认 true，但已安装的旧任务仍是 `ac_only=false`；`fat doctor` / `fat schedule status` 会显示不一致，确认后才能 `fat schedule install --force` 重装。
 - `fat prune --apply` 会不可逆地删除 FatTrace 库内快照/文件明细/汇总（不碰用户文件）；实例 `auto_prune` 已开启（daily/weekly），首次真实清理预计 2026-11-05 之后；执行前可先 `fat prune` dry-run，重大保留期调整先在副本验证。
 - `<db_dir>/reports/weekly-*.html` 与 `<db_dir>/logs/maintain.log` 含完整路径/卷信息，按本地敏感数据对待，不要随意外发。
 - `config.yaml` 与 `rules.yaml` 都位于 DB 目录且会被 CLI/report/serve 读取；不要从不可信目录加载，改动后重启进程。
@@ -476,7 +500,7 @@ FatTrace/
 
 新对话可以直接发：
 
-> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`，从 M7b 收尾与 M7 门禁复核（真实一周样本、首次文件行清理、首份周报、14 天无人值守）继续 FatTrace 项目。保持“所有工具/缓存都在工作区”的原则。
+> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`，从 M8a 收尾（提交/推送需等我说“git”）与 M7 门禁复核（真实一周样本、首次文件行清理、首份周报、14 天无人值守）继续 FatTrace 项目。保持“所有工具/缓存都在工作区”的原则；计划任务/安装器/ACL 等系统级改动必须先问我。
 
 接手后先跑：
 
@@ -493,6 +517,7 @@ DB='D:\FatTraceDemo\.cache\fattrace\fattrace.db'
 ./fat.exe config show --db "$DB"
 ./fat.exe daily --db "$DB"
 ./fat.exe alerts --db "$DB"
+./fat.exe doctor --db "$DB"
 ./fat.exe prune --db "$DB"
 ./fat.exe schedule status --db "$DB"
 tail -n 30 'D:\FatTraceDemo\.cache\fattrace\logs\maintain.log'
@@ -500,4 +525,4 @@ dir 'D:\FatTraceDemo\.cache\fattrace\reports'
 ./fat.exe serve --db "$DB" --addr 127.0.0.1:0
 ```
 
-确认测试全绿、`fat diff`/`fat report`/`fat serve` 能复现 `docs/m3`–`docs/m7b` 的输出（`#7→#8` 解释率 93.63%，`#3→#9` 99.37%，规则页 69 条），再检查 `docs/m7-results.md` / `docs/m7b-results.md` 里“真实一周待复核”“首批文件行清理”的门禁。若已积累 ≥7 天计划任务数据，用 `fat daily --days 3` 重算并按实际结果更新文档；首份真实的 weekly 报告预计 2026-11-08。
+确认测试全绿、`fat diff`/`fat report`/`fat serve` 能复现 `docs/m3`–`docs/m7b` 的输出（`#7→#8` 解释率 93.63%，`#3→#9` 99.37%，规则页 69 条），再检查 `docs/m7-results.md`、`docs/m7b-results.md`、`docs/m8a-results.md` 里的门禁与偏差。`fat doctor` 在真实库应显示 `0 fail`；两个旧任务的 `not AC-only` 警告在未重装前属预期。若已积累 ≥7 天计划任务数据，用 `fat daily --days 3` 重算并按实际结果更新文档；首份真实的 weekly 报告预计 2026-11-08。

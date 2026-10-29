@@ -53,20 +53,23 @@ type AlertState struct {
 
 // Alert is the evaluated view of one growth threshold.
 type Alert struct {
-	Key            string  `json:"key"`
-	VolumeID       int64   `json:"volume_id"`
-	Root           string  `json:"root,omitempty"`
-	Day            string  `json:"day,omitempty"`
-	Kind           string  `json:"kind"`
-	Message        string  `json:"message"`
-	ValueBytes     int64   `json:"value_bytes"`
-	UsedBytes      int64   `json:"used_bytes"`
-	ThresholdBytes int64   `json:"threshold_bytes"`
-	ThresholdPct   float64 `json:"threshold_pct"`
-	Triggered      bool    `json:"triggered"`
-	Fired          bool    `json:"fired"`
-	Muted          bool    `json:"muted"`
-	LastFiredAt    int64   `json:"last_fired_at_ms,omitempty"`
-	MutedUntil     int64   `json:"muted_until_ms,omitempty"`
-	Hits           int64   `json:"hits"`
+	Key               string  `json:"key"`
+	VolumeID          int64   `json:"volume_id"`
+	Root              string  `json:"root,omitempty"`
+	Day               string  `json:"day,omitempty"`
+	Kind              string  `json:"kind"`
+	Message           string  `json:"message"`
+	ValueBytes        int64   `json:"value_bytes"`
+	UsedBytes         int64   `json:"used_bytes"`
+	ThresholdBytes    int64   `json:"threshold_bytes"`
+	ThresholdPct      float64 `json:"threshold_pct"`
+	ThresholdMultiple float64 `json:"threshold_multiple,omitempty"`
+	BaselineBytes     int64   `json:"baseline_bytes,omitempty"`
+	Multiple          float64 `json:"multiple,omitempty"`
+	Triggered         bool    `json:"triggered"`
+	Fired             bool    `json:"fired"`
+	Muted             bool    `json:"muted"`
+	LastFiredAt       int64   `json:"last_fired_at_ms,omitempty"`
+	MutedUntil        int64   `json:"muted_until_ms,omitempty"`
+	Hits              int64   `json:"hits"`
 }
