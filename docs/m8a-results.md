@@ -46,7 +46,7 @@
 
 ```text
 go vet ./...                     通过
-go test ./... -count=1           全部通过（115 个 Test 函数）
+go test ./... -count=1           全部通过（117 个 Test 函数）
 node --check internal/server/web/app.js  通过
 ```
 
@@ -111,8 +111,8 @@ fat ... version → 0.1.0-m8a
 3. **倍数告警默认关闭。**
    功能已实现并测试，但默认 `growth_multiple: 0`，避免在真实一周样本尚未复核时突然增加告警。启用只需修改配置。
 
-4. **CI 尚未在 GitHub 实际跑过。**
-   工作流文件已写好；要等下一次推送后才能看到 `windows-latest` 结果。
+4. **CI 首次运行失败，已修复待重新推送。**
+   2026-10-29 的 `windows-latest` 运行在 `Doctor smoke test` 失败：全新数据库没有快照时，doctor 把每个 root 的“无完整快照”判成 fail，进程退出 1。现已改为“库中零快照的首次运行仅警告”，并新增回归测试；本地隔离 `FATTRACE_HOME` 冒烟为 `8 ok · 3 warn · 0 fail · 1 skipped`、退出 0。待下一次推送后复核 GitHub Actions。
 
 5. **代码签名、安装包、4 周 dogfood 未完成。**
    这些属于 M8 的发布阶段，依赖证书、管理员安装和日历时间；当前门禁仍是 2026-11-05 / 11-06 / 11-08 / 11-12。

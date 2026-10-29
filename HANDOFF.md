@@ -229,8 +229,8 @@ FatTrace/
 - **导出泄露提示**：报告页脚顶部黄色提示“含完整路径/大小，分享前确认敏感信息”；`fat report` 终端也打印 sharing note。
 - **AC-only 调度**：`schedule.ac_only` 默认 true，XML `DisallowStartIfOnBatteries=true`；手动 `fat snap` 不受影响。`schtasks /Query /XML` 解析支持 UTF-16LE/UTF-8，`schedule status` 显示实际 run_level/ac_only/start 并对配置不一致告警。
 - **发布资料**：`README.md`、`SECURITY.md`、`.github/workflows/ci.yml`（windows-latest vet/test/build/doctor 冒烟）、`scripts/release.ps1`（amd64/arm64 + SHA256SUMS）。
-- **验证**：`go vet` 与 115 个 Test 全过；真实库 doctor `9 ok / 3 warn / 0 fail`（3 条警告为快照 3 个扫描错误 + 两个旧任务非 AC-only）；SPA 状态/规则页实浏览器冒烟通过；报告包含导出提示；release 脚本产出并验证 `version`。
-- **未做/偏差**：计划任务仍为 `LeastPrivilege`、未重装（AC-only 只对新安装生效）；无 Program Files 安装器/ACL 收紧/代码签名；CI 尚未在 GitHub 实跑。原因与关闭路径见 `docs/m8a-results.md`。
+- **验证**：`go vet` 与 117 个 Test 全过；真实库 doctor `9 ok / 3 warn / 0 fail`（3 条警告为快照 3 个扫描错误 + 两个旧任务非 AC-only）；SPA 状态/规则页实浏览器冒烟通过；报告包含导出提示；release 脚本产出并验证 `version`。
+- **未做/偏差**：计划任务仍为 `LeastPrivilege`、未重装（AC-only 只对新安装生效）；无 Program Files 安装器/ACL 收紧/代码签名；CI 首次运行因 doctor 在全新库上误报 fail 而失败，已修复（首次运行改为警告）并新增回归测试，待重新推送后复核。原因与关闭路径见 `docs/m8a-results.md`。
 
 ### 当前 CLI
 

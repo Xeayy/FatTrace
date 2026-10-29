@@ -163,13 +163,14 @@ func Run(ctx context.Context, opts Options) Report {
 	}
 
 	snapshots, snapErr := st.ListSnapshots(ctx, 1000)
+	firstRun := snapErr == nil && len(snapshots) == 0
 	if snapErr != nil {
 		add("snapshots", LevelWarn, snapErr.Error(), "run fat status to inspect the database")
-	} else if len(snapshots) == 0 {
+	} else if firstRun {
 		add("snapshots", LevelWarn, "no snapshots yet", "run fat snap or fat maintain")
 	}
 	for _, root := range cfg.Schedule.Roots {
-		checkRoot(ctx, st, add, root, opts.Now, snapshots)
+		checkRoot(ctx, st, add, root, opts.Now, snapshots, firstRun)
 	}
 
 	if set, err := rules.Load(opts.DBPath); err != nil {
@@ -207,7 +208,7 @@ func checkSpace(add func(string, Level, string, string), dbPath string, dbBytes 
 }
 
 func checkRoot(ctx context.Context, st *store.Store, add func(string, Level, string, string),
-	root string, now time.Time, all []store.SnapshotInfo) {
+	root string, now time.Time, all []store.SnapshotInfo, firstRun bool) {
 	name := "snapshot " + root
 	info, err := os.Stat(root)
 	if err != nil {
@@ -231,6 +232,11 @@ func checkRoot(ctx context.Context, st *store.Store, add func(string, Level, str
 
 	complete, ok := latestCompleteForRoot(ctx, st, root)
 	if !ok {
+		if firstRun {
+			add(name, LevelWarn, "no snapshot yet",
+				"run fat snap --kind daily \""+root+"\" or wait for the scheduled task")
+			return
+		}
 		add(name, LevelFail, "no complete snapshot for this root",
 			"run fat snap --kind daily \""+root+"\" or wait for the scheduled task")
 		return

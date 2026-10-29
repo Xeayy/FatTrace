@@ -134,6 +134,57 @@ func TestRunMissingRoot(t *testing.T) {
 	}
 }
 
+func TestRunFreshDatabaseIsWarning(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "fattrace.db")
+	root := filepath.Join(dir, "data")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Defaults()
+	cfg.Schedule.Roots = []string{root}
+	if err := config.Save(filepath.Join(dir, config.FileName), cfg); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Close()
+
+	rep := Run(context.Background(), Options{DBPath: dbPath, Now: time.Now(), SkipTasks: true})
+	if rep.Failed() {
+		t.Fatalf("fresh database should not fail: %+v", rep.Checks)
+	}
+	snap := findCheck(t, rep, "snapshot "+root)
+	if snap.Level != LevelWarn {
+		t.Fatalf("fresh snapshot check = %+v", snap)
+	}
+	if !strings.Contains(snap.Summary, "no snapshot yet") {
+		t.Fatalf("fresh summary = %q", snap.Summary)
+	}
+	if !strings.Contains(snap.Hint, "fat snap") {
+		t.Fatalf("fresh hint = %q", snap.Hint)
+	}
+}
+
+func TestRunMissingSnapshotForExistingRootFails(t *testing.T) {
+	f := newFixture(t, time.Hour, 0)
+	other := filepath.Join(f.dir, "other")
+	if err := os.MkdirAll(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Defaults()
+	cfg.Schedule.Roots = []string{f.root, other}
+	if err := config.Save(filepath.Join(f.dir, config.FileName), cfg); err != nil {
+		t.Fatal(err)
+	}
+	rep := Run(context.Background(), Options{DBPath: f.db, Now: f.now, SkipTasks: true})
+	if c := findCheck(t, rep, "snapshot "+other); c.Level != LevelFail {
+		t.Fatalf("unscanned root should fail: %+v", c)
+	}
+}
+
 func TestRunMalformedConfig(t *testing.T) {
 	f := newFixture(t, time.Hour, 0)
 	if err := os.WriteFile(filepath.Join(f.dir, config.FileName),
