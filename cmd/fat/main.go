@@ -38,6 +38,18 @@ func main() {
 		fileIDCmd(os.Args[2:])
 	case "db":
 		dbCmd(os.Args[2:])
+	case "config":
+		configCmd(os.Args[2:])
+	case "daily":
+		dailyCmd(os.Args[2:])
+	case "alerts":
+		alertsCmd(os.Args[2:])
+	case "prune":
+		pruneCmd(os.Args[2:])
+	case "schedule":
+		scheduleCmd(os.Args[2:])
+	case "maintain":
+		maintainCmd(os.Args[2:])
 	case "status":
 		statusCmd(os.Args[2:])
 	case "version":
@@ -62,6 +74,12 @@ usage:
   fat serve [flags]
   fat fileid <path>
   fat db init [--db path]
+  fat config init|show [flags]
+  fat daily [flags]
+  fat alerts [flags]
+  fat prune [flags]
+  fat schedule install|uninstall|status [flags]
+  fat maintain [flags]
   fat status [--json] [--db path]
   fat version
 
@@ -103,8 +121,43 @@ serve flags:
   -top int         ranking rows per diff API call (default 20)
   -db string       database file (overrides FATTRACE_HOME)
 
+config flags:
+  init flags:
+    -roots string  comma-separated scan roots, e.g. "D:\"
+    -force         overwrite an existing config file
+    -db string     database file (config lives next to it)
+
+daily flags:
+  -days int        recompute this many recent days (default 14; 0 = all)
+  -top int         ranked directories per day (default 10)
+  -db string       database file
+  -json            output JSON
+
+alerts flags:
+  -mute duration   mute all growth alerts for this long (e.g. 24h)
+  -unmute          clear active mutes
+  -db string       database file
+  -json            output JSON
+
+prune flags:
+  -apply           execute deletions (default is a dry run)
+  -db string       database file
+  -json            output JSON
+
+schedule flags (install/uninstall):
+  -dry-run         write XML and show commands without touching Task Scheduler
+  -force           replace existing tasks
+  -db string       database file
+
+maintain flags:
+  -kind string     snapshot kind: daily or weekly (default "daily")
+  -db string       database file
+  -quiet           suppress scan progress
+  -json            output JSON
+
 The database defaults to %LOCALAPPDATA%\FatTrace\fattrace.db.
-FATTRACE_HOME overrides the directory; --db overrides the file.`)
+FATTRACE_HOME overrides the directory; --db overrides the file.
+The config file is <db_dir>\config.yaml; run "fat config init" first.`)
 }
 
 func scanCmd(args []string) {

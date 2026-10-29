@@ -1,7 +1,7 @@
 # FatTrace 项目交接文档
 
-- 更新时间：2026-10-28
-- 状态：**M0–M6 已完成并通过门禁；M7（调度、保留与告警）待开始**
+- 更新时间：2026-10-29
+- 状态：**M0–M7 已完成**（M7 的“真实一周解释率 ≥70%”门禁待计划任务实际运行一周后复核；其余门禁已通过）
 - 项目根目录：`D:\FatTraceDemo\FatTrace`
 
 ## 0. 项目一句话
@@ -20,7 +20,7 @@
 | Go 模块缓存 | `D:\FatTraceDemo\.cache\gomod` |
 | Go 构建缓存 | `D:\FatTraceDemo\.cache\gobuild` |
 | Go 代理 | `GOPROXY=https://goproxy.cn,direct`（已验证 200；proxy.golang.org 不可达，goproxy.io 超时） |
-| Git | `git init` 已提交并推送到私有仓库 `Xeayy/FatTrace`（分支 master；首个提交 `06d6590` 覆盖 M0–M2） |
+| Git | `git init` 已提交并推送到私有仓库 `Xeayy/FatTrace`（分支 master；M0–M2 `06d6590`，M3 `1ed8b27`，M4 `9addaa5`，M5 `c0f0172`，M6 `6e03e7c`；M7 变更待用户授权提交） |
 | 其他 | Node 24、Python 3.14 可用；非管理员会话 |
 
 每次新终端先执行：
@@ -36,7 +36,7 @@ cd /d/FatTraceDemo/FatTraceDemo/FatTrace
 FatTrace/
   go.mod                        module fattrace, go 1.27.0（modernc.org/sqlite v1.61.0）
   .gitignore
-  cmd/fat/main.go               CLI 入口：scan / snap / diff / report / serve / fileid / db / status / version
+  cmd/fat/main.go               CLI 入口：scan / snap / diff / report / serve / fileid / db / config / daily / alerts / prune / schedule / maintain / status / version
   cmd/fat/db.go                 CLI: db init / status
   cmd/fat/snap.go               CLI: snap（进度、Ctrl+C/Ctrl+Break、JSON）
   cmd/fat/diff.go               CLI: diff（配对、--week、Top-N、解释层、表格/JSON，只读连接）
@@ -53,6 +53,25 @@ FatTrace/
   internal/rules/apply.go       rules.Diff：观察者聚合解释率、未解释榜单、榜单规则标注
   internal/rules/builtin.yaml   内嵌 69 条规则、18 个类别
   internal/rules/rules_test.go  7 个规则/聚合/标注测试
+  internal/config/config.go     <db_dir>/config.yaml：调度、保留、告警；默认值/校验/UTF-8 YAML
+  internal/config/config_test.go 9 个配置/调度时间测试
+  internal/daily/daily.go       日汇总：日/周快照配对、解释率、Top 目录、Top 事件
+  internal/daily/daily_test.go  2 个基线/窗口测试
+  internal/alerts/alerts.go     告警阈值、沉默窗口、只读预览
+  internal/alerts/alerts_test.go 4 个触发/静默/预览/阈值测试
+  internal/prune/prune.go       保留计划与执行（只清理库内历史）
+  internal/prune/prune_test.go  2 个 dry-run/apply 精确删除测试
+  internal/schedule/schedule.go Task Scheduler XML（UTF-16）、安装/卸载/查询
+  internal/schedule/schedule_test.go 6 个 XML/参数/查询测试
+  cmd/fat/config.go             CLI: config init/show
+  cmd/fat/daily.go              CLI: daily（日汇总）
+  cmd/fat/alerts.go             CLI: alerts（检查/静默/解除）
+  cmd/fat/prune.go              CLI: prune（默认 dry-run）
+  cmd/fat/schedule.go           CLI: schedule install/uninstall/status
+  cmd/fat/maintain.go           CLI: maintain（快照 → 日汇总 → 告警 → 可选清理）
+  internal/store/schema_v3.sql  v3：daily_summary 增加 root/from_snapshot/growth/explained
+  internal/store/maintenance.go 日汇总/事件/告警状态/保留清理 API
+  internal/model/maintenance.go DailySummary / DailyTopDir / FileEvent / Alert / AlertState
   internal/report/report.go     周报数据、treemap 自有增量、Explanation、单文件渲染
   internal/report/service.go    rules.Diff + 快照错误 → HTML
   internal/report/template.html 内嵌模板：CSS + Canvas squarified treemap + 解释面板 + 列表
@@ -74,11 +93,12 @@ FatTrace/
   internal/store/browse.go      目录下钻（FRN/面包屑/单层子项）与卷根趋势
   internal/store/store_test.go / snapshot_test.go / browse_test.go  共 21 个 store 测试
   internal/server/server.go     只读 server：embed、路由、token 鉴权、安全头、规则集加载
-  internal/server/api.go        /api/status|snapshots|diff|rules|dir|trend + diff 结果缓存
+  internal/server/api.go        /api/status|snapshots|diff|rules|dir|trend|config|daily|alerts + diff 结果缓存
   internal/server/server_test.go API 鉴权/口径/缓存/错误映射/规则与解释测试
+  internal/server/maintenance_api_test.go /api/config|daily|alerts 测试（3 个）
   internal/server/latency_test.go 真实库 P95 门禁（需 FATTRACE_DB）
   internal/server/web/index.html SPA 外壳与导航
-  internal/server/web/app.js    原生 ES module：路由、treemap、sparkline、解释面板、六视图
+  internal/server/web/app.js    原生 ES module：路由、treemap、sparkline、解释面板、日汇总/告警/配置面板、六视图
   internal/server/web/app.css   深色只读主题
   fat.exe                       本地构建产物（被 .gitignore 忽略）
   docs/m0-results.md            M0 实测记录
@@ -88,6 +108,7 @@ FatTrace/
   docs/m4-results.md            M4 实测记录
   docs/m5-results.md            M5 实测记录
   docs/m6-results.md            M6 实测记录（规则引擎、93.63% 解释率样本）
+  docs/m7-results.md            M7 实测记录（配置、日汇总 99.37%、告警、保留、计划任务）
 ```
 
 ### 已实现能力
@@ -162,6 +183,19 @@ FatTrace/
 - 接入：`fat diff` 输出解释率/类别/未解释 Top 10 与榜单标签；`fat report` 增加解释率 KPI、<70% 横幅、类别条形图、未解释 Top 50 与行内规则标签；`fat serve` 的 `/api/diff` 带 `explanation`，新增 `GET /api/rules`，SPA 总览/对比显示解释面板、规则页显示 69 条真实规则。
 - 实测：工作区 `#7 → #8`（真实 `go get`/build/日志/用户文件增长）观测增长 62.80 MiB，已解释 58.80 MiB，**93.63%**，未解释 4.00 MiB（用户二进制与源码）；D: `#2 → #3` 137.81 MiB 观测增长解释率四舍五入 100.00%（未解释 760 B），但样本几乎全是 FatTrace 自身 DB，仅作卷根路径补充。细节见 `docs/m6-results.md`。
 
+### M7 已实现（调度、保留与告警）
+
+- 配置：`<db_dir>/config.yaml`（`schedule.roots/daily_at/weekly_at`、`retention.*`、`alerts.*`），缺失回退默认值，未知字段/非法值 fail-loud；`fat config init -roots "D:\"` / `fat config show [--json]`。
+- schema v3：`daily_summary` 增加 `root/from_snapshot_id/growth_bytes/explained_bytes/explained_pct`；只读连接不迁移，`fat serve` 启动时短暂用写连接迁移 1≤v<3 的库。
+- 日汇总：`fat daily [--days N] [--top N]`。只取卷根 complete 快照，按本地日取最后一条；基线为“之前最近有数据那天的最后一条”，无前日时用当天第一条（日内增量）；单快照日增量 0。落 `daily_summary`、`daily_top_dirs`（Top 10）、`file_events`（Top 20）。
+- 告警：`fat alerts [--mute 24h|--unmute] [--json]`。按卷取最新日汇总，净 Δ 超字节阈值或（实际 >0 时）百分比阈值即触发；`alert_state` 记录 key/last_fired/last_value/muted_until/hits，静默期只更新 last_value 不重复 fire；server 用 `Persist:false` 只读预览。
+- 保留：`fat prune [--apply] [--json]`，默认 dry-run。只删库内过期 daily/weekly 快照（级联 `snap_*`）与 `daily_summary/daily_top_dirs/file_events`；manual、每组最新、running 永不删；**从不触碰被扫描文件**；`retention.auto_prune` 控制 weekly maintain 收尾清理。
+- 调度：`fat schedule install [--dry-run|--force] | uninstall | status`，生成 UTF-16LE XML 并调用 `schtasks /Create /XML`；任务 `FatTrace-Daily` / `FatTrace-Weekly`，`InteractiveToken + LeastPrivilege + Hidden + StartWhenAvailable + IgnoreNew`，执行 `fat.exe maintain --kind daily|weekly --quiet --db "<path>"`。
+- maintain：`fat maintain --kind daily|weekly [--quiet] [--json]`：按 config roots 扫描 → 日汇总（近 14 天）→ 告警 → weekly 且 auto_prune 时清理。
+- 只读展示：`/api/config`、`/api/daily?limit=`、`/api/alerts`；SPA 时间轴日汇总表、规则页配置面板、总览告警横幅、状态页告警表。
+- 实测：真实库迁移 v2→v3；2026-10-28（#2→#3）+137.76 MiB / 100.00%；2026-10-29（#3→#9）净值 −5.76 GiB、观测增长 141.68 GiB、解释率 **99.37%**、覆盖率 99.52%；告警首触发/静默/窗口结束再触发与只读预览均验证；prune dry-run 0 过期；计划任务实际安装（下次 2026-10-30 03:00 / 2026-11-01 04:00）后卸载无残留；SPA 四视图截图通过。细节见 `docs/m7-results.md`。
+- **门禁说明**：真实一周样本尚未产生（当前只有连续两日），需计划任务实际运行一周后复核 ≥70%；不得以两日数据冒充一周。
+
 ### 当前 CLI
 
 ```bash
@@ -185,6 +219,21 @@ FatTrace/
 ./fat.exe serve                        # 默认库、随机回环端口，打印带 token 的 URL
 ./fat.exe serve --db 'D:\...\fattrace.db' --addr 127.0.0.1:8765
 ./fat.exe serve --top 50               # 调整 diff 榜单条数
+./fat.exe config init -roots "D:\"     # 写 <db_dir>/config.yaml（已存在需 --force）
+./fat.exe config show [--json]
+./fat.exe daily                        # 重算最近 14 天日汇总
+./fat.exe daily --days 0 --top 20      # 全量重算、每天 20 个 Top 目录
+./fat.exe alerts                       # 评估阈值并持久化触发/静默状态
+./fat.exe alerts --mute 24h            # 手工静默全部卷
+./fat.exe alerts --unmute
+./fat.exe prune                        # 默认 dry-run
+./fat.exe prune --apply                # 仅清理库内历史，不动文件
+./fat.exe schedule install --dry-run   # 只生成 XML、打印 schtasks 命令
+./fat.exe schedule install             # 安装 FatTrace-Daily / Weekly（--force 覆盖）
+./fat.exe schedule status
+./fat.exe schedule uninstall
+./fat.exe maintain --kind daily        # 计划任务入口：扫描→日汇总→告警
+./fat.exe maintain --kind weekly --quiet --json
 ./fat.exe fileid "D:/some/file.bin"
 ./fat.exe db init
 ./fat.exe db init --db "D:/tmp/test.db"
@@ -220,7 +269,7 @@ FatTrace/
 - 产品原则：建议不等于执行；删除永远由用户操作。
 - 解释规则只贴标签、不改变 Δ、不触发任何动作；规则匹配纯内存，不查库。
 
-## 5. 里程碑定案与 M7 计划
+## 5. 里程碑定案与记录
 
 ### M2 定案（开工前三问的答案）
 
@@ -271,7 +320,7 @@ FatTrace/
 - **展示与数据同源**：CLI、周报、API、SPA 全部消费同一个 `model.Explanation`，报告模板不重算。
 - **验收口径**：主证据用工作区真实开发增长（93.63%），D: 卷根样本仅作补充；真实一周样本留到 M7 复核。
 
-### M7：调度、保留与告警（下一步）
+### M7 原始计划（历史，已完成）
 
 目标：日/周自动快照与保留策略落地；告警阈值与静默窗口；用真实一周数据复核解释率。
 
@@ -285,13 +334,23 @@ FatTrace/
 4. 配置入口：阈值/静默窗口用本地配置文件 + CLI（server 保持只读，不新增写 API），SPA 只展示当前配置。
 5. 一周真实样本：复核解释率、未解释高频路径，必要时补规则或进程线索。
 
-开工前要定：
+当时待定问题（已定案，见下）：
 
 - 调度器归属：Task Scheduler 还是常驻 `fat daemon`（锁、退出与错过补跑）。
 - 保留删除边界：只删库内历史，绝不删除被扫描文件。
 - 告警通道：周报横幅 / 本地通知 / 状态页，默认不弹窗。
 
-开发样本：`D:\FatTraceDemo\.cache\fattrace\fattrace.db` 现有 D: 卷根 #2/#3、工作区 #7/#8（M6 解释率样本），#4 partial、#5 failed 用于异常路径；#1/#6 为早期子目录快照。
+开发样本：`D:\FatTraceDemo\.cache\fattrace\fattrace.db` 现有 D: 卷根 #2/#3/#9（#9 为 M7 maintain 生成的 2026-10-29 日快照，466,061 文件 / 242.48 GiB）、工作区 #7/#8（M6 解释率样本），#4 partial、#5 failed 用于异常路径；#1/#6 为早期子目录快照。库内已有 `daily_summary` 2026-10-28 / 2026-10-29、`file_events` 30 行、`alert_state` 1 行（受控低阈值测试留下，默认阈值下不触发）；同目录 `config.yaml`（roots `D:\`，默认保留与告警）与 `tasks/` XML 为验证产物。计划任务已卸载，`fat schedule status` 显示 missing。
+
+### M7 定案（已实现）
+
+- **调度器选型**：Windows Task Scheduler（不引入常驻 daemon）；两个当前用户任务，`StartWhenAvailable` 补跑一次，不做补偿队列。
+- **任务不提权**：`InteractiveToken + LeastPrivilege`，任务可见文件与手工 `fat snap` 一致；需要全盘可见性时按风险节把二进制放受控路径再提权安装。
+- **日汇总口径**：只认卷根 complete；按本地日取最后一条，基线为“之前最近有数据那天最后一条”，无前日则当天第一条；单快照日增量 0。
+- **告警去重**：状态键 `growth:<volume_id>`；静默期内只更新 `last_value` 不重复 fire；server 只读预览绝不写状态。
+- **保留边界**：只删库内 daily/weekly 快照与汇总/事件行；manual、每组最新、running 永不动；默认 dry-run，`auto_prune` 默认关闭。
+- **配置 fail-loud**：未知字段、非法时间、相对根直接失败，避免拼写错误静默生效。
+- **验收口径**：真实两日样本 99.37% 仅作趋势证据；真实一周解释率门禁待计划任务累积后复核，不得用两日数据替代。
 
 ## 6. 关键实现细节 / 坑
 
@@ -301,7 +360,7 @@ FatTrace/
 - 覆盖率用唯一**实占**字节；逻辑字节会被压缩/硬链接放大。
 - 非管理员 C: 覆盖率仅 78.73%，主要缺口是 WindowsApps、System Volume Information、pagefile 等；报告必须显示覆盖率与错误数。
 - 硬链接去重 map 在 86 万文件时峰值堆约 41 MiB；目标预算 300 MiB，仍有余量。
-- USN journal **不提供字节写入量**；churn 精确值需 ETW，M7 再议，v1 用日增量近似。
+- USN journal **不提供字节写入量**；churn 精确值需 ETW，M7 未实现进程线索，v1 用日增量近似。
 - 长路径统一经 `toLongPath` 加 `\\?\` 前缀；UNC 暂不支持。
 - `INSERT OR REPLACE` 既慢（实测 52k vs 140k rows/s）又掩盖重复键，批量写入一律「先 DELETE 再普通 INSERT」。
 - 多行 VALUES 的甜点是 256 行/语句（2048 个参数）；512 行反而略慢。
@@ -353,12 +412,29 @@ FatTrace/
 - `/api/rules` 只序列化 `Set` 的导出字段（规则、来源计数、用户路径），编译后的 glob 不对外；不要把 `compiled` 导出。
 - 周报/SPA 的解释横幅阈值是 70%，与 M6 门禁一致；低置信度规则标签用黄色提示，但仍计入已解释字节。
 - 测试样例里 `#7 → #8` 是工作区样本（解释率 93.63%），`#2 → #3` 是 D: 卷根样本（几乎全是自身 DB）；不要拿后者代表真实一周。
+- `alerts.Evaluate` 构造状态时必须显式 `state.Key = key`：漏掉会让 `alert_state.alert_key` 写成空串，静默和去重全部失效（已修复，`alerts_test.go` 有持久化键回归断言）。
+- 告警百分比条件带 `value > 0`：净删除日永远不触发；负净值只能从观测增长/解释率观察。
+- server `/api/alerts` 固定 `Persist:false`：预览不写 `last_fired/hits/mute`；只有 CLI 与 `maintain` 会写状态。
+- 日汇总只认卷根 complete 快照；子目录、partial、failed 都不参与；`from_snapshot_id` 可能跨多日（中间没扫描时一天覆盖多日增量）。
+- `daily` 的 `--days N` 只重算最近 N 天且幂等（先删该日旧行再写），不会清理窗口外的旧汇总；清理归 `prune`。
+- `prune` 按快照 `started_at` 判断过期；manual、每个 `(volume, root)` 最新、`running` 永不删；`--apply` 不可逆且会 checkpoint WAL，先 dry-run。
+- `auto_prune` 只在 `maintain --kind weekly` 尾部执行；daily maintain 不清理。
+- 配置是严格 YAML：未知字段/非法时间/相对 roots 会让 `diff`/`report`/`serve`/`maintain` 一起启动失败；`config.yaml` 与 `rules.yaml` 都在 `<db_dir>`，`fat config init` 默认不覆盖（需 `--force`）。
+- Task Scheduler XML 的元素顺序是规范的一部分（`Settings` 内顺序错会被 `schtasks` 拒绝），必须 UTF-16LE + BOM；用 `encoding/xml` 生成后再转码，别手拼字符串。
+- Git Bash 调 `schtasks` 用 `//Query`（避免 MSYS 把 `/Query` 转成路径）；任务名输出为 GBK，读取时需 `iconv -f GBK -t UTF-8`。
+- `InteractiveToken` 任务只在用户登录时运行；`StartWhenAvailable` 只补跑一次，不做错过队列。任务用当前用户 `LeastPrivilege` 即可创建，不必提权。
+- `fat serve` 启动时可能短暂用写连接迁移到 v3；`fat status` 只读不迁移。旧库直接 `serve` 会迁移，直接 `status` 不会。
+- `maintain` 的 roots 只来自配置；roots 为空直接失败，绝不会默认扫 `C:`。
+- 告警与日汇总的数值都是实占（allocated）口径；别拿逻辑字节对照。
 
 ## 7. 风险与安全提醒
 
-- 计划任务提权时，二进制必须放 `%ProgramFiles%\FatTrace\` 并限制 ACL；配置/DB 放 `%LOCALAPPDATA%`，任务不能指向用户可写目录。
+- 计划任务提权时，二进制必须放 `%ProgramFiles%\FatTrace\` 并限制 ACL；配置/DB 放 `%LOCALAPPDATA%`，任务不能指向用户可写目录。当前实现默认**不提权**：`InteractiveToken + LeastPrivilege`，任务可见范围与手工 `fat snap` 相同。
 - 本地 server 仅绑 `127.0.0.1`，随机端口 + 每会话 token；快照含全盘路径，不云同步。
 - 删除类建议只给路径与预期收益，不自动执行。
+- `fat prune --apply` 会不可逆地删除 FatTrace 库内快照/汇总（不碰用户文件）；`auto_prune` 默认关闭，开启前先跑 dry-run 看报告。
+- `config.yaml` 与 `rules.yaml` 都位于 DB 目录且会被 CLI/report/serve 读取；不要从不可信目录加载，改动后重启进程。
+- 计划任务执行时用户需已登录（InteractiveToken）；注销/关机期间不会运行，恢复后最多补跑一次。
 - `rules.yaml` 只描述匹配与标签，不执行代码；读取时 `KnownFields(true)` + 严格校验，避免用户配置成为注入面。
 - 测试时不要扫描 `System Volume Information` 等受保护目录做写操作；只读可忽略错误。
 
@@ -366,7 +442,7 @@ FatTrace/
 
 新对话可以直接发：
 
-> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`，从 M7 调度、保留与告警开始继续 FatTrace 项目。保持“所有工具/缓存都在工作区”的原则。
+> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`，从 M7 验收复核（真实一周样本、调度任务实际运行、告警与保留）继续 FatTrace 项目。保持“所有工具/缓存都在工作区”的原则。
 
 接手后先跑：
 
@@ -375,11 +451,17 @@ source /d/FatTraceDemo/FatTraceDemo/tools/env.sh
 cd /d/FatTraceDemo/FatTraceDemo/FatTrace
 go test ./... -count=1
 export FATTRACE_HOME='D:\FatTraceDemo\.cache\fattrace'
+DB='D:\FatTraceDemo\.cache\fattrace\fattrace.db'
 ./fat.exe status
 ./fat.exe diff --from 7 --to 8
-./fat.exe diff --from 2 --to 3
+./fat.exe diff --from 3 --to 9
 ./fat.exe report --from 7 --to 8 --out 'D:\FatTraceDemo\.cache\fattrace\report-7-8.html'
-./fat.exe serve --db 'D:\FatTraceDemo\.cache\fattrace\fattrace.db' --addr 127.0.0.1:0
+./fat.exe config show --db "$DB"
+./fat.exe daily --db "$DB"
+./fat.exe alerts --db "$DB"
+./fat.exe prune --db "$DB"
+./fat.exe schedule status --db "$DB"
+./fat.exe serve --db "$DB" --addr 127.0.0.1:0
 ```
 
-确认测试全绿、`fat diff`/`fat report`/`fat serve` 能复现 `docs/m3-results.md`、`docs/m4-results.md`、`docs/m5-results.md`、`docs/m6-results.md` 的输出（解释率 93.63%、规则页 69 条）后，进入 M7。
+确认测试全绿、`fat diff`/`fat report`/`fat serve` 能复现 `docs/m3`–`docs/m7` 的输出（`#7→#8` 解释率 93.63%，`#3→#9` 99.37%，规则页 69 条），再检查 `docs/m7-results.md` 里“真实一周待复核”的门禁。若已积累 ≥7 天计划任务数据，用 `fat daily --days 0` 重算并据实更新文档。

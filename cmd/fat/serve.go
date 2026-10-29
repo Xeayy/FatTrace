@@ -32,6 +32,7 @@ func serveCmd(args []string) {
 	if err != nil {
 		fail(err)
 	}
+	migrateForServe(path)
 	st, err := store.OpenReader(path)
 	if err != nil {
 		switch {
@@ -76,4 +77,29 @@ func serveCmd(args []string) {
 	if err := srv.Serve(ctx, ln); err != nil {
 		fail(err)
 	}
+}
+
+// migrateForServe upgrades an existing database before the read-only server
+// opens it: readers never migrate, and /api/daily needs the current schema.
+func migrateForServe(path string) {
+	if _, err := os.Stat(path); err != nil {
+		return
+	}
+	ctx := context.Background()
+	r, err := store.OpenReader(path)
+	if err != nil {
+		return
+	}
+	v, err := r.SchemaVersion(ctx)
+	r.Close()
+	if err != nil || v == 0 || v >= store.CurrentSchemaVersion {
+		return
+	}
+	w, err := store.Open(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not migrate schema to v%d: %v\n",
+			store.CurrentSchemaVersion, err)
+		return
+	}
+	w.Close()
 }
