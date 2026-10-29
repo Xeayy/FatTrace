@@ -1,7 +1,7 @@
 # FatTrace 项目交接文档
 
 - 更新时间：2026-10-29
-- 状态：**M0–M7 已完成**（M7 的“真实一周解释率 ≥70%”门禁待计划任务实际运行一周后复核；其余门禁已通过）
+- 状态：**M0–M7 已完成并推送**（M7 `2882f39`，其后 `559d6cd` 记录哈希）。计划任务已安装，正在积累真实一周样本（2026-10-29 首次计划运行成功，快照 #10）；“真实一周解释率 ≥70%”门禁待 2026-11-05 之后复核。
 - 项目根目录：`D:\FatTraceDemo\FatTrace`
 
 ## 0. 项目一句话
@@ -20,7 +20,7 @@
 | Go 模块缓存 | `D:\FatTraceDemo\.cache\gomod` |
 | Go 构建缓存 | `D:\FatTraceDemo\.cache\gobuild` |
 | Go 代理 | `GOPROXY=https://goproxy.cn,direct`（已验证 200；proxy.golang.org 不可达，goproxy.io 超时） |
-| Git | `git init` 已提交并推送到私有仓库 `Xeayy/FatTrace`（分支 master；M0–M2 `06d6590`，M3 `1ed8b27`，M4 `9addaa5`，M5 `c0f0172`，M6 `6e03e7c`，M7 `2882f39`） |
+| Git | `git init` 已提交并推送到私有仓库 `Xeayy/FatTrace`（分支 master；M0–M2 `06d6590`，M3 `1ed8b27`，M4 `9addaa5`，M5 `c0f0172`，M6 `6e03e7c`，M7 `2882f39`；`559d6cd` 记录 M7 哈希） |
 | 其他 | Node 24、Python 3.14 可用；非管理员会话 |
 
 每次新终端先执行：
@@ -193,8 +193,8 @@ FatTrace/
 - 调度：`fat schedule install [--dry-run|--force] | uninstall | status`，生成 UTF-16LE XML 并调用 `schtasks /Create /XML`；任务 `FatTrace-Daily` / `FatTrace-Weekly`，`InteractiveToken + LeastPrivilege + Hidden + StartWhenAvailable + IgnoreNew`，执行 `fat.exe maintain --kind daily|weekly --quiet --db "<path>"`。
 - maintain：`fat maintain --kind daily|weekly [--quiet] [--json]`：按 config roots 扫描 → 日汇总（近 14 天）→ 告警 → weekly 且 auto_prune 时清理。
 - 只读展示：`/api/config`、`/api/daily?limit=`、`/api/alerts`；SPA 时间轴日汇总表、规则页配置面板、总览告警横幅、状态页告警表。
-- 实测：真实库迁移 v2→v3；2026-10-28（#2→#3）+137.76 MiB / 100.00%；2026-10-29（#3→#9）净值 −5.76 GiB、观测增长 141.68 GiB、解释率 **99.37%**、覆盖率 99.52%；告警首触发/静默/窗口结束再触发与只读预览均验证；prune dry-run 0 过期；计划任务实际安装（下次 2026-10-30 03:00 / 2026-11-01 04:00）后卸载无残留；SPA 四视图截图通过。细节见 `docs/m7-results.md`。
-- **门禁说明**：真实一周样本尚未产生（当前只有连续两日），需计划任务实际运行一周后复核 ≥70%；不得以两日数据冒充一周。
+- 实测：真实库迁移 v2→v3；2026-10-28（#2→#3）+137.76 MiB / 100.00%；2026-10-29（#3→#10）净值 −5.70 GiB、观测增长 141.74 GiB、解释率 **99.37%**、覆盖率 99.52%；告警首触发/静默/窗口结束再触发与只读预览均验证；prune dry-run 0 过期；计划任务实际安装并由 Task Scheduler 实跑成功（2026-10-29 17:27，Last Result 0，快照 #10），现保持安装以积累一周样本；SPA 四视图截图通过。细节见 `docs/m7-results.md`。
+- **门禁说明**：真实一周样本自 2026-10-29 起通过计划任务积累，需在 **2026-11-05 之后**复核 ≥70%；不得以两日数据冒充一周。
 
 ### 当前 CLI
 
@@ -340,7 +340,7 @@ FatTrace/
 - 保留删除边界：只删库内历史，绝不删除被扫描文件。
 - 告警通道：周报横幅 / 本地通知 / 状态页，默认不弹窗。
 
-开发样本：`D:\FatTraceDemo\.cache\fattrace\fattrace.db` 现有 D: 卷根 #2/#3/#9（#9 为 M7 maintain 生成的 2026-10-29 日快照，466,061 文件 / 242.48 GiB）、工作区 #7/#8（M6 解释率样本），#4 partial、#5 failed 用于异常路径；#1/#6 为早期子目录快照。库内已有 `daily_summary` 2026-10-28 / 2026-10-29、`file_events` 30 行、`alert_state` 1 行（受控低阈值测试留下，默认阈值下不触发）；同目录 `config.yaml`（roots `D:\`，默认保留与告警）与 `tasks/` XML 为验证产物。计划任务已卸载，`fat schedule status` 显示 missing。
+开发样本：`D:\FatTraceDemo\.cache\fattrace\fattrace.db` 现有 D: 卷根 #2/#3/#9/#10（#9 为 M7 maintain 手工运行、#10 为 2026-10-29 计划任务实跑，466,199 文件 / 242.54 GiB）、工作区 #7/#8（M6 解释率样本），#4 partial、#5 failed 用于异常路径；#1/#6 为早期子目录快照。库内已有 `daily_summary` 2026-10-28 / 2026-10-29（后者已更新为 #3→#10）、`file_events` 51 行、`alert_state` 1 行（受控低阈值测试留下，默认阈值下不触发）；同目录 `config.yaml`（roots `D:\`，默认保留与告警）与 `tasks/` XML 为验证产物。**计划任务保持安装**：`FatTrace-Daily` 下次 2026-10-30 03:00，`FatTrace-Weekly` 下次 2026-11-01 04:00。
 
 ### M7 定案（已实现）
 
@@ -425,6 +425,7 @@ FatTrace/
 - `InteractiveToken` 任务只在用户登录时运行；`StartWhenAvailable` 只补跑一次，不做错过队列。任务用当前用户 `LeastPrivilege` 即可创建，不必提权。
 - `fat serve` 启动时可能短暂用写连接迁移到 v3；`fat status` 只读不迁移。旧库直接 `serve` 会迁移，直接 `status` 不会。
 - `maintain` 的 roots 只来自配置；roots 为空直接失败，绝不会默认扫 `C:`。
+- 日汇总/解释率会把 FatTrace 自身 DB/WAL 增长算作“应用数据库”（每个日快照约几十 MB）；复核一周门禁时应扣除这部分工具自噪声。
 - 告警与日汇总的数值都是实占（allocated）口径；别拿逻辑字节对照。
 
 ## 7. 风险与安全提醒
