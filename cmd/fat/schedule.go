@@ -52,6 +52,7 @@ func scheduleInstallCmd(args []string) {
 	tasks, err := schedule.Build(schedule.Options{
 		Exe: exe, DBPath: path, Roots: cfg.Schedule.Roots,
 		DailyAt: cfg.Schedule.DailyAt, WeeklyAt: cfg.Schedule.WeeklyAt,
+		ACOnly: cfg.Schedule.ACOnly,
 	})
 	if err != nil {
 		fail(err)
@@ -92,20 +93,31 @@ func scheduleStatusCmd(args []string) {
 	fmt.Printf("config:    %s\n", cfg.Path)
 	fmt.Printf("daily:     %s\n", cfg.Schedule.DailyAt)
 	fmt.Printf("weekly:    %s\n", cfg.Schedule.WeeklyAt)
+	fmt.Printf("ac_only:   %v\n", cfg.Schedule.ACOnly)
 	if len(cfg.Schedule.Roots) == 0 {
 		fmt.Println("roots:     none (schedule install will refuse)")
 	} else {
 		fmt.Printf("roots:     %v\n", cfg.Schedule.Roots)
 	}
 	for _, name := range []string{schedule.DailyName, schedule.WeeklyName} {
-		ok, err := schedule.Exists(context.Background(), name)
+		r, err := schedule.Query(context.Background(), name)
 		if err != nil {
 			fail(err)
 		}
-		state := "missing"
-		if ok {
-			state = "installed"
+		if !r.Exists {
+			fmt.Printf("%-10s missing\n", name)
+			continue
 		}
-		fmt.Printf("%-10s %s\n", name, state)
+		fmt.Printf("%-10s installed  %s  run=%s  ac_only=%v  start=%s\n",
+			name, r.Command, r.RunLevel, r.DisallowStartIfOnBatteries, r.StartBoundary)
+		if cfg.Schedule.ACOnly && !r.DisallowStartIfOnBatteries {
+			fmt.Println("           config wants AC-only but the installed task is not; reinstall with fat schedule install --force")
+		}
+		if !r.StartWhenAvailable {
+			fmt.Println("           missed runs are not caught up; reinstall with fat schedule install --force")
+		}
+		if r.Command == "" {
+			fmt.Println("           task has no executable")
+		}
 	}
 }

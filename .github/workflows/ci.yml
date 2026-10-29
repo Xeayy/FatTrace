@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test ./... -count=1
+      - name: Build
+        run: go build -trimpath -ldflags "-s -w -X main.version=ci" -o fat.exe ./cmd/fat
+      - name: Doctor smoke test
+        run: |
+          .\fat.exe db init
+          .\fat.exe config init -roots $env:TEMP
+          .\fat.exe doctor --skip-tasks

@@ -4,6 +4,7 @@
 package schedule
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -30,6 +31,7 @@ type Options struct {
 	Roots    []string
 	DailyAt  string
 	WeeklyAt string
+	ACOnly   bool
 	Now      time.Time
 }
 
@@ -41,6 +43,23 @@ type Task struct {
 	NextRun time.Time `json:"next_run"`
 	Command string    `json:"command"`
 	Args    string    `json:"arguments"`
+	ACOnly  bool      `json:"ac_only"`
+}
+
+// Registered is the read-only view of an installed task. RunLevel defaults to
+// LeastPrivilege because schtasks omits the element for user-level tasks.
+type Registered struct {
+	Name                       string `json:"name"`
+	Exists                     bool   `json:"exists"`
+	Enabled                    bool   `json:"enabled"`
+	RunLevel                   string `json:"run_level"`
+	LogonType                  string `json:"logon_type"`
+	Command                    string `json:"command"`
+	Arguments                  string `json:"arguments"`
+	StartBoundary              string `json:"start_boundary,omitempty"`
+	StartWhenAvailable         bool   `json:"start_when_available"`
+	DisallowStartIfOnBatteries bool   `json:"disallow_start_if_on_batteries"`
+	Hidden                     bool   `json:"hidden"`
 }
 
 // Build validates the schedule and computes both tasks without touching the
@@ -84,7 +103,7 @@ func Build(opts Options) ([]Task, error) {
 		return Task{
 			Name: name, Kind: kind, NextRun: next,
 			XMLPath: filepath.Join(dir, name+".xml"),
-			Command: exe, Args: args,
+			Command: exe, Args: args, ACOnly: opts.ACOnly,
 		}
 	}
 	return []Task{
@@ -148,6 +167,100 @@ func Exists(ctx context.Context, name string) (bool, error) {
 		return false, nil
 	}
 	return false, err
+}
+
+// Query reads the registered task definition. A missing task is not an error;
+// the returned value has Exists=false.
+func Query(ctx context.Context, name string) (Registered, error) {
+	cmd := exec.CommandContext(ctx, "schtasks", "/Query", "/TN", name, "/XML")
+	out, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return Registered{Name: name}, nil
+		}
+		return Registered{Name: name}, fmt.Errorf("query task %s: %w", name, err)
+	}
+	r, err := parseRegistered(out)
+	if err != nil {
+		return Registered{Name: name}, fmt.Errorf("parse task %s: %w", name, err)
+	}
+	r.Name = name
+	r.Exists = true
+	return r, nil
+}
+
+type registeredXML struct {
+	Principals struct {
+		Principal struct {
+			UserID    string `xml:"UserId"`
+			LogonType string `xml:"LogonType"`
+			RunLevel  string `xml:"RunLevel"`
+		} `xml:"Principal"`
+	} `xml:"Principals"`
+	Settings struct {
+		DisallowStartIfOnBatteries bool  `xml:"DisallowStartIfOnBatteries"`
+		StartWhenAvailable         bool  `xml:"StartWhenAvailable"`
+		Hidden                     bool  `xml:"Hidden"`
+		Enabled                    *bool `xml:"Enabled"`
+	} `xml:"Settings"`
+	Triggers struct {
+		Calendar struct {
+			StartBoundary string `xml:"StartBoundary"`
+		} `xml:"CalendarTrigger"`
+	} `xml:"Triggers"`
+	Actions struct {
+		Exec struct {
+			Command   string `xml:"Command"`
+			Arguments string `xml:"Arguments"`
+		} `xml:"Exec"`
+	} `xml:"Actions"`
+}
+
+func parseRegistered(data []byte) (Registered, error) {
+	data = decodeTaskOutput(data)
+	var doc registeredXML
+	if err := xml.Unmarshal(data, &doc); err != nil {
+		return Registered{}, err
+	}
+	r := Registered{
+		Enabled:                    true,
+		RunLevel:                   doc.Principals.Principal.RunLevel,
+		LogonType:                  doc.Principals.Principal.LogonType,
+		Command:                    doc.Actions.Exec.Command,
+		Arguments:                  doc.Actions.Exec.Arguments,
+		StartBoundary:              doc.Triggers.Calendar.StartBoundary,
+		StartWhenAvailable:         doc.Settings.StartWhenAvailable,
+		DisallowStartIfOnBatteries: doc.Settings.DisallowStartIfOnBatteries,
+		Hidden:                     doc.Settings.Hidden,
+	}
+	if r.RunLevel == "" {
+		r.RunLevel = "LeastPrivilege"
+	}
+	if r.LogonType == "" {
+		r.LogonType = "InteractiveToken"
+	}
+	if doc.Settings.Enabled != nil {
+		r.Enabled = *doc.Settings.Enabled
+	}
+	return r, nil
+}
+
+// decodeTaskOutput handles schtasks' UTF-16LE output and strips the XML
+// declaration: schtasks declares UTF-16 even when it emits UTF-8/ASCII bytes.
+func decodeTaskOutput(data []byte) []byte {
+	if len(data) >= 2 && data[0] == 0xFF && data[1] == 0xFE {
+		units := make([]uint16, 0, (len(data)-2)/2)
+		for i := 2; i+1 < len(data); i += 2 {
+			units = append(units, uint16(data[i])|uint16(data[i+1])<<8)
+		}
+		data = []byte(string(utf16.Decode(units)))
+	}
+	if bytes.HasPrefix(data, []byte("<?xml")) {
+		if i := bytes.Index(data, []byte("?>")); i >= 0 {
+			data = data[i+2:]
+		}
+	}
+	return data
 }
 
 // Install registers the tasks. It refuses to replace existing tasks unless
@@ -339,8 +452,8 @@ func buildTaskXML(t Task, kind scheduleKind) taskXML {
 		}},
 		Settings: settings{
 			MultipleInstancesPolicy:    "IgnoreNew",
-			DisallowStartIfOnBatteries: false,
-			StopIfGoingOnBatteries:     true,
+			DisallowStartIfOnBatteries: t.ACOnly,
+			StopIfGoingOnBatteries:     t.ACOnly,
 			AllowHardTerminate:         true,
 			StartWhenAvailable:         true,
 			RunOnlyIfNetworkAvailable:  false,

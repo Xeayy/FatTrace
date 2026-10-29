@@ -73,6 +73,48 @@ func seedSnapshot(t *testing.T, st *store.Store, vol int64, root, status string,
 	return id
 }
 
+func TestRejectsForeignHostAndOrigin(t *testing.T) {
+	f := newFixture(t)
+
+	send := func(mutate func(*http.Request)) *http.Response {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodGet, f.ts.URL+"/", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mutate(req)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { resp.Body.Close() })
+		return resp
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*http.Request)
+		want   int
+	}{
+		{"foreign host", func(r *http.Request) { r.Host = "evil.example" }, http.StatusMisdirectedRequest},
+		{"foreign origin", func(r *http.Request) { r.Header.Set("Origin", "http://evil.example") }, http.StatusForbidden},
+		{"null origin", func(r *http.Request) { r.Header.Set("Origin", "null") }, http.StatusForbidden},
+		{"wrong port", func(r *http.Request) { r.Header.Set("Origin", "http://127.0.0.1:1") }, http.StatusForbidden},
+		{"same origin", func(r *http.Request) { r.Header.Set("Origin", f.ts.URL) }, http.StatusOK},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := send(tc.mutate)
+			if resp.StatusCode != tc.want {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.want)
+			}
+			if resp.Header.Get("Access-Control-Allow-Origin") != "" {
+				t.Fatal("server must not emit CORS headers")
+			}
+		})
+	}
+}
+
 type testFixture struct {
 	store *store.Store
 	ts    *httptest.Server

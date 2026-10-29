@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"fattrace/internal/alerts"
@@ -96,14 +97,19 @@ func printAlerts(rep alerts.Report) {
 		case a.Triggered:
 			status = "active"
 		}
-		threshold := ""
-		switch {
-		case a.ThresholdBytes > 0 && a.ThresholdPct > 0:
-			threshold = fmt.Sprintf("%s / %.1f%%", formatBytes(a.ThresholdBytes), a.ThresholdPct)
-		case a.ThresholdBytes > 0:
-			threshold = formatBytes(a.ThresholdBytes)
-		default:
-			threshold = fmt.Sprintf("%.1f%%", a.ThresholdPct)
+		var parts []string
+		if a.ThresholdBytes > 0 {
+			parts = append(parts, formatBytes(a.ThresholdBytes))
+		}
+		if a.ThresholdPct > 0 {
+			parts = append(parts, fmt.Sprintf("%.1f%%", a.ThresholdPct))
+		}
+		if a.ThresholdMultiple > 0 {
+			parts = append(parts, fmt.Sprintf("%.1f×", a.ThresholdMultiple))
+		}
+		threshold := strings.Join(parts, " / ")
+		if threshold == "" {
+			threshold = "—"
 		}
 		fmt.Printf("%-14s  %-10s  %-8d  %-14s  %-7s  %-8d  %s\n",
 			a.Root, a.Day, a.VolumeID, formatBytes(a.ValueBytes), status, a.Hits, threshold)

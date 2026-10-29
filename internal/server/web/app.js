@@ -1174,7 +1174,12 @@ function alertsPanel(rep) {
     const parts = [];
     if (a.threshold_bytes > 0) parts.push(fmtBytes(a.threshold_bytes));
     if (a.threshold_pct > 0) parts.push(a.threshold_pct.toFixed(1) + "%");
+    if (a.threshold_multiple > 0) parts.push(a.threshold_multiple.toFixed(1) + "×");
     return parts.join(" / ") || "—";
+  };
+  const baselineLabel = (a) => {
+    if (!a.baseline_bytes || !(a.value_bytes > 0)) return "—";
+    return fmtBytes(a.baseline_bytes) + " 中位 · " + (a.multiple || 0).toFixed(1) + "×";
   };
   const rows = list.map((a) => {
     let state;
@@ -1190,16 +1195,19 @@ function alertsPanel(rep) {
       td(signedBytes(a.value_bytes), "num " + signClass(a.value_bytes)),
       td(fmtBytes(a.used_bytes), "num"),
       td(thLabel(a), "num"),
+      td(baselineLabel(a), "num dim"),
       td(when, "dim"),
       td(fmtCount(a.hits), "num"),
     ];
   });
   p.appendChild(dataTable([
     { label: "根" }, { label: "日期" }, { label: "状态" }, { label: "实测净增长", num: true },
-    { label: "已用", num: true }, { label: "阈值", num: true }, { label: "最近提醒 / 静默至" }, { label: "命中", num: true },
+    { label: "已用", num: true }, { label: "阈值", num: true }, { label: "基准 / 倍数", num: true },
+    { label: "最近提醒 / 静默至" }, { label: "命中", num: true },
   ], rows));
   p.appendChild(el("div", "notice",
-    "比较对象是每日净增长（实占）。静默只压制重复提醒，不会隐藏超阈值事实；服务端展示为只读预览，不写告警状态。"));
+    "比较对象是每日净增长（实占）。倍数阈值的基准是前 14 天正增长日的中位数，至少 3 个样本才评估。" +
+    "静默只压制重复提醒，不会隐藏超阈值事实；服务端展示为只读预览，不写告警状态。"));
   return p;
 }
 
@@ -1224,6 +1232,8 @@ function configPanel(cfg) {
         roots.length ? "path" : "warn")],
       [td("每日", "dim"), td(sched.daily_at || "—")],
       [td("每周", "dim"), td(sched.weekly_at || "—")],
+      [td("电源", "dim"), td(sched.ac_only ? "仅交流电（用电池时等待）" : "不限电源",
+        sched.ac_only ? "dim" : "warn")],
       [td("安装 / 查看", "dim"), td("fat schedule install · fat schedule status")],
     ]));
   grid.appendChild(ps);
@@ -1253,6 +1263,10 @@ function configPanel(cfg) {
     [
       [td("单日净增长", "dim"), td(al.growth_bytes > 0 ? fmtBytes(al.growth_bytes) : "关闭")],
       [td("占已用比例", "dim"), td(al.growth_pct > 0 ? al.growth_pct.toFixed(1) + "%" : "关闭")],
+      [td("相对前 14 天正增长日中位数", "dim"),
+        td(al.growth_multiple > 0 ? al.growth_multiple.toFixed(1) + "×" : "关闭")],
+      [td("倍数起算下限", "dim"),
+        td(al.growth_multiple > 0 ? fmtBytes(al.growth_multiple_floor_bytes) : "—")],
       [td("静默窗口", "dim"), td(al.silence_hours + " 小时")],
     ]));
   grid.appendChild(pa);

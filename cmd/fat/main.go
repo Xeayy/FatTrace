@@ -16,7 +16,8 @@ import (
 	"fattrace/internal/scan"
 )
 
-const version = "0.1.0-dev"
+// version is overridden at build time with -ldflags "-X main.version=...".
+var version = "0.1.0-dev"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -50,6 +51,8 @@ func main() {
 		scheduleCmd(os.Args[2:])
 	case "maintain":
 		maintainCmd(os.Args[2:])
+	case "doctor":
+		doctorCmd(os.Args[2:])
 	case "status":
 		statusCmd(os.Args[2:])
 	case "version":
@@ -80,6 +83,7 @@ usage:
   fat prune [flags]
   fat schedule install|uninstall|status [flags]
   fat maintain [flags]
+  fat doctor [--json] [--skip-tasks] [--strict] [--db path]
   fat status [--json] [--db path]
   fat version
 
@@ -154,6 +158,12 @@ maintain flags:
   -db string       database file
   -quiet           suppress scan progress
   -json            output JSON
+
+doctor flags:
+  -json            output JSON
+  -skip-tasks      skip Task Scheduler checks
+  -strict          exit 1 on warnings as well as failures
+  -db string       database file
 
 The database defaults to %LOCALAPPDATA%\FatTrace\fattrace.db.
 FATTRACE_HOME overrides the directory; --db overrides the file.

@@ -57,4 +57,5 @@ func reportCmd(args []string) {
 		fail(err)
 	}
 	fmt.Printf("wrote %s (%s) in %.2fs\n", abs, formatBytes(int64(len(page))), time.Since(started).Seconds())
+	fmt.Println("sharing note: the report lists full file paths and sizes; review it before sending it to anyone")
 }
