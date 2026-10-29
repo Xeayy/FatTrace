@@ -63,6 +63,31 @@ func browseFixture(t *testing.T) (*Store, int64, int64) {
 	return s, vol, snap
 }
 
+func TestBrowseMarksExpiredFileRows(t *testing.T) {
+	s, _, snap := browseFixture(t)
+	ctx := context.Background()
+	res, err := s.BrowseDir(ctx, snap, 0, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FilesExpired || res.FilesTotal != 1 {
+		t.Fatalf("fresh listing: expired=%v files=%d", res.FilesExpired, res.FilesTotal)
+	}
+	if _, err := s.DeleteSnapshotFiles(ctx, []int64{snap}); err != nil {
+		t.Fatal(err)
+	}
+	res, err = s.BrowseDir(ctx, snap, 0, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.FilesExpired || res.FilesTotal != 0 {
+		t.Fatalf("expired listing: expired=%v files=%d", res.FilesExpired, res.FilesTotal)
+	}
+	if res.DirsTotal != 2 {
+		t.Fatalf("directory aggregates disappeared: %d", res.DirsTotal)
+	}
+}
+
 func TestBrowseDirRootAndChildren(t *testing.T) {
 	s, _, snap := browseFixture(t)
 	ctx := context.Background()

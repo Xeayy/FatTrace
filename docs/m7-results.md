@@ -1,5 +1,7 @@
 # M7 技术验证记录：调度、保留与告警
 
+> 后续调整见 `docs/m7b-results.md`（2026-10-29）：文件明细按日 7 天/周 3 周降采样，`auto_prune` 覆盖 daily/weekly maintain，新增自动周报与滚动日志；本文的“weekly 才清理”“日汇总近 14 天”描述为 M7 当时状态。
+
 - 日期：2026-10-29
 - 环境：Windows 11 22631 / NTFS / 非管理员 / Go 1.27.0（工作区便携工具链）
 - 代码：`internal/{config,daily,alerts,prune,schedule}`、`internal/store/{schema_v3.sql,maintenance.go}`、`internal/model/maintenance.go`、`cmd/fat/{config,daily,alerts,prune,schedule,maintain}.go`、`internal/server/{server.go,api.go,web/*}`

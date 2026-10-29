@@ -2,6 +2,7 @@ package diff
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -195,6 +196,59 @@ func TestServiceCrossVolumeAnnotation(t *testing.T) {
 	if got := findFile(t, res.TopGrowth, 10); got.SuspectedFromVolume != 0 {
 		t.Fatalf("annotation leaked without the flag: %+v", got)
 	}
+}
+
+func TestServiceRejectsExpiredFileRows(t *testing.T) {
+	base := []model.FileRecord{
+		rootDir(1, `D:\`),
+		{FRN: 10, ParentFRN: 1, Name: "a.bin", Size: 100, AllocSize: 100},
+	}
+	with := func(extra model.FileRecord) []model.FileRecord {
+		out := append([]model.FileRecord{}, base...)
+		return append(out, extra)
+	}
+
+	cases := []struct {
+		name    string
+		expired string
+		delete  int
+	}{
+		{"from expired", "from", 1},
+		{"to expired", "to", 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			st := newStore(t)
+			ctx := context.Background()
+			vol, err := st.EnsureVolume(ctx, 0x2222, "NTFS", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			s1 := seedSnapshot(t, st, vol, `D:\`, "complete", 1000, with(
+				model.FileRecord{FRN: 11, ParentFRN: 1, Name: "b.bin", Size: 100, AllocSize: 100}))
+			s2 := seedSnapshot(t, st, vol, `D:\`, "complete", 1200, with(
+				model.FileRecord{FRN: 12, ParentFRN: 1, Name: "c.bin", Size: 200, AllocSize: 200}))
+			from, to := s1, s2
+			expired := s1
+			if tc.delete == 2 {
+				expired = s2
+			}
+			if _, err := st.DeleteSnapshotFiles(ctx, []int64{expired}); err != nil {
+				t.Fatal(err)
+			}
+			_, err = Run(ctx, st, Options{FromID: from, ToID: to, TopN: 5})
+			if err == nil || !strings.Contains(err.Error(), "retention") {
+				t.Fatalf("diff error = %v, want retention error", err)
+			}
+			if !strings.Contains(err.Error(), "#"+itoa64(expired)) {
+				t.Fatalf("diff error does not name snapshot #%d: %v", expired, err)
+			}
+		})
+	}
+}
+
+func itoa64(v int64) string {
+	return fmt.Sprintf("%d", v)
 }
 
 func TestVolumeCheckTolerance(t *testing.T) {

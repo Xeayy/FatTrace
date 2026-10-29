@@ -1,7 +1,7 @@
 # FatTrace 项目交接文档
 
 - 更新时间：2026-10-29
-- 状态：**M0–M7 已完成并推送**（M7 `2882f39`，其后 `559d6cd` 记录哈希）。计划任务已安装，正在积累真实一周样本（2026-10-29 首次计划运行成功，快照 #10）；“真实一周解释率 ≥70%”门禁待 2026-11-05 之后复核。
+- 状态：**M0–M7 已完成并推送；M7b（文件行降采样、自动周报、滚动日志）已实现并验证，尚未提交**（等待用户说“git”）。计划任务已安装，正在积累真实一周样本（2026-10-29 首次计划运行成功，快照 #10）；“真实一周解释率 ≥70%”门禁待 2026-11-05 之后复核；首份真实周报预计 2026-11-08；14 天无人值守门禁待 2026-11-12 之后复核。
 - 项目根目录：`D:\FatTraceDemo\FatTrace`
 
 ## 0. 项目一句话
@@ -59,16 +59,19 @@ FatTrace/
   internal/daily/daily_test.go  2 个基线/窗口测试
   internal/alerts/alerts.go     告警阈值、沉默窗口、只读预览
   internal/alerts/alerts_test.go 4 个触发/静默/预览/阈值测试
-  internal/prune/prune.go       保留计划与执行（只清理库内历史）
-  internal/prune/prune_test.go  2 个 dry-run/apply 精确删除测试
+  internal/prune/prune.go       保留计划与执行（文件行降采样 + 快照/汇总/事件清理）
+  internal/prune/prune_test.go  3 个 dry-run/apply/文件行保留测试
   internal/schedule/schedule.go Task Scheduler XML（UTF-16）、安装/卸载/查询
   internal/schedule/schedule_test.go 6 个 XML/参数/查询测试
+  internal/logfile/logfile.go   维护日志轮转（5 MiB × 3）
+  internal/logfile/logfile_test.go 2 个轮转/重开测试
   cmd/fat/config.go             CLI: config init/show
   cmd/fat/daily.go              CLI: daily（日汇总）
   cmd/fat/alerts.go             CLI: alerts（检查/静默/解除）
-  cmd/fat/prune.go              CLI: prune（默认 dry-run）
+  cmd/fat/prune.go              CLI: prune（默认 dry-run，输出文件行 cutoff）
   cmd/fat/schedule.go           CLI: schedule install/uninstall/status
-  cmd/fat/maintain.go           CLI: maintain（快照 → 日汇总 → 告警 → 可选清理）
+  cmd/fat/maintain.go           CLI: maintain（快照 → 日汇总 → 告警 → 周报 → 可选清理 → 日志）
+  cmd/fat/maintain_test.go      3 个 weekly 配对/跨度/周报文件名测试
   internal/store/schema_v3.sql  v3：daily_summary 增加 root/from_snapshot/growth/explained
   internal/store/maintenance.go 日汇总/事件/告警状态/保留清理 API
   internal/model/maintenance.go DailySummary / DailyTopDir / FileEvent / Alert / AlertState
@@ -109,6 +112,7 @@ FatTrace/
   docs/m5-results.md            M5 实测记录
   docs/m6-results.md            M6 实测记录（规则引擎、93.63% 解释率样本）
   docs/m7-results.md            M7 实测记录（配置、日汇总 99.37%、告警、保留、计划任务）
+  docs/m7b-results.md           M7b 实测记录（文件行降采样、自动周报、滚动日志、过期 diff 提示）
 ```
 
 ### 已实现能力
@@ -189,12 +193,23 @@ FatTrace/
 - schema v3：`daily_summary` 增加 `root/from_snapshot_id/growth_bytes/explained_bytes/explained_pct`；只读连接不迁移，`fat serve` 启动时短暂用写连接迁移 1≤v<3 的库。
 - 日汇总：`fat daily [--days N] [--top N]`。只取卷根 complete 快照，按本地日取最后一条；基线为“之前最近有数据那天的最后一条”，无前日时用当天第一条（日内增量）；单快照日增量 0。落 `daily_summary`、`daily_top_dirs`（Top 10）、`file_events`（Top 20）。
 - 告警：`fat alerts [--mute 24h|--unmute] [--json]`。按卷取最新日汇总，净 Δ 超字节阈值或（实际 >0 时）百分比阈值即触发；`alert_state` 记录 key/last_fired/last_value/muted_until/hits，静默期只更新 last_value 不重复 fire；server 用 `Persist:false` 只读预览。
-- 保留：`fat prune [--apply] [--json]`，默认 dry-run。只删库内过期 daily/weekly 快照（级联 `snap_*`）与 `daily_summary/daily_top_dirs/file_events`；manual、每组最新、running 永不删；**从不触碰被扫描文件**；`retention.auto_prune` 控制 weekly maintain 收尾清理。
+- 保留：`fat prune [--apply] [--json]`，默认 dry-run。分两级：①过期 `snap_files` 文件明细按 `daily_file_days=7` / `weekly_file_weeks=3` 删除，快照与 `snap_dirs` 按 30 天 / 365 天继续保留，每个 `(volume, root, kind)` 的最新两个 complete 快照文件行受保护；②过期 daily/weekly 快照（级联 `snap_*` 与事件）及 `daily_summary/daily_top_dirs/file_events`。manual、running 永不删；**从不触碰被扫描文件**；`retention.auto_prune` 控制 daily/weekly maintain 收尾清理（默认 false，实例已启用）。
 - 调度：`fat schedule install [--dry-run|--force] | uninstall | status`，生成 UTF-16LE XML 并调用 `schtasks /Create /XML`；任务 `FatTrace-Daily` / `FatTrace-Weekly`，`InteractiveToken + LeastPrivilege + Hidden + StartWhenAvailable + IgnoreNew`，执行 `fat.exe maintain --kind daily|weekly --quiet --db "<path>"`。
-- maintain：`fat maintain --kind daily|weekly [--quiet] [--json]`：按 config roots 扫描 → 日汇总（近 14 天）→ 告警 → weekly 且 auto_prune 时清理。
+- maintain：`fat maintain --kind daily|weekly [--quiet] [--json]`：按 config roots 扫描 → 日汇总（近 3 天）→ 告警 → weekly 生成同根最近两个 weekly 的 HTML 周报（跨度 ≥5 天）→ `auto_prune` 时清理；全过程写 `<db_dir>/logs/maintain.log`（5 MiB × 3 轮转）。
 - 只读展示：`/api/config`、`/api/daily?limit=`、`/api/alerts`；SPA 时间轴日汇总表、规则页配置面板、总览告警横幅、状态页告警表。
 - 实测：真实库迁移 v2→v3；2026-10-28（#2→#3）+137.76 MiB / 100.00%；2026-10-29（#3→#10）净值 −5.70 GiB、观测增长 141.74 GiB、解释率 **99.37%**、覆盖率 99.52%；告警首触发/静默/窗口结束再触发与只读预览均验证；prune dry-run 0 过期；计划任务实际安装并由 Task Scheduler 实跑成功（2026-10-29 17:27，Last Result 0，快照 #10），现保持安装以积累一周样本；SPA 四视图截图通过。细节见 `docs/m7-results.md`。
 - **门禁说明**：真实一周样本自 2026-10-29 起通过计划任务积累，需在 **2026-11-05 之后**复核 ≥70%；不得以两日数据冒充一周。
+
+### M7b 已实现（存储预算、自动周报、滚动日志）
+
+- 配置：`retention.daily_file_days=7`、`weekly_file_weeks=3`；`auto_prune` 改为 daily/weekly maintain 都执行，默认仍 false（实例验证后已设 true）。
+- 文件行降采样：仅删 `snap_files`，`snapshots`/`snap_dirs` 保留 30 天 / 365 天；每个 `(volume, root, kind)` 最新两个 complete 快照受保护；manual 永不处理。一年期稳态估算从 5–6 GB 降到约 0.8–1.1 GB。
+- 过期提示：`fat diff` 遇到文件行已清理的快照返回明确 retention 错误；`/api/dir` 返回 `files_expired`，SPA 提示“文件明细已按保留策略清理，仅保留目录聚合”。
+- 自动周报：weekly maintain 在 prune 前生成同根最近两个 complete weekly 的报告，跨度 <5 天跳过；文件为 `<db_dir>/reports/weekly-<volumeID>-<date>-<rootLabel>-<rootHash>.html`（root 哈希避免同卷多 root 覆盖）；报告失败只记 skip，不阻断其他 root。
+- 滚动日志：`internal/logfile`，`<db_dir>/logs/maintain.log`，5 MiB × 3，`--quiet` 仍记录；日志打开失败只警告。
+- 日汇总重算窗口 14 → 3 天：与 7 天文件行保留匹配，避免重算触碰已清理快照。
+- 实测（真实库副本）：1,954,128 文件行 → 删除 465,841 行（#9），snapshots 与 snap_dirs 不变，#10 与 400 天 manual 文件行完好；过期 #9 diff 明确报错；全量 30 天清理仍按预期级联目录与事件。独立小库验证首份周报 29,921 B、日志全阶段、自动 prune 删除 3 行文件明细、API `files_expired=true`。全量 **104 个测试**通过，`go vet` 通过。
+- 门禁：存储预算预计通过，待 2026-11-05 后首次真实文件行清理实测；首份真实周报 **2026-11-08**；真实一周解释率门禁 **2026-11-05 之后**；14 天无人值守 **2026-11-12 之后**。细节见 `docs/m7b-results.md`。
 
 ### 当前 CLI
 
@@ -221,19 +236,19 @@ FatTrace/
 ./fat.exe serve --top 50               # 调整 diff 榜单条数
 ./fat.exe config init -roots "D:\"     # 写 <db_dir>/config.yaml（已存在需 --force）
 ./fat.exe config show [--json]
-./fat.exe daily                        # 重算最近 14 天日汇总
+./fat.exe daily                        # CLI 默认重算最近 14 天（maintain 内部用 3 天）
 ./fat.exe daily --days 0 --top 20      # 全量重算、每天 20 个 Top 目录
 ./fat.exe alerts                       # 评估阈值并持久化触发/静默状态
 ./fat.exe alerts --mute 24h            # 手工静默全部卷
 ./fat.exe alerts --unmute
-./fat.exe prune                        # 默认 dry-run
-./fat.exe prune --apply                # 仅清理库内历史，不动文件
+./fat.exe prune                        # 默认 dry-run；输出快照 cutoff 与文件行 cutoff
+./fat.exe prune --apply                # 只清理库内历史（含过期 snap_files），不动文件
 ./fat.exe schedule install --dry-run   # 只生成 XML、打印 schtasks 命令
 ./fat.exe schedule install             # 安装 FatTrace-Daily / Weekly（--force 覆盖）
 ./fat.exe schedule status
 ./fat.exe schedule uninstall
-./fat.exe maintain --kind daily        # 计划任务入口：扫描→日汇总→告警
-./fat.exe maintain --kind weekly --quiet --json
+./fat.exe maintain --kind daily        # 扫描→日汇总(3天)→告警→可选清理；写 logs/maintain.log
+./fat.exe maintain --kind weekly --quiet --json   # 额外生成 reports/weekly-*.html
 ./fat.exe fileid "D:/some/file.bin"
 ./fat.exe db init
 ./fat.exe db init --db "D:/tmp/test.db"
@@ -261,7 +276,7 @@ FatTrace/
 - Windows 10/11 + NTFS 优先；Go 单二进制 + SQLite（`modernc.org/sqlite v1.61.0`，纯 Go）+ 内嵌 SPA。
 - 身份键 `(volume_serial, FileID)`；路径只做展示。库内用 `volume_id`，FRN 以 int64 存储。
 - 时间字段统一 unix 毫秒；`mtime_ms=0` 表示未知。
-- 每日轻扫描（更新当前基线 + 日摘要），每周全量快照（目录级长期保留 + 文件级保留近 3 周）。
+- 每日轻扫描（更新当前基线 + 日摘要），每周全量快照；目录聚合长期保留（日 30 天 / 周 365 天），文件明细降采样（日 7 天 / 周 3 周）。
 - 扫描任务提权、UI 不提权；非管理员模式降级并在报告显示覆盖率/错误。
 - 单写：进程级锁文件 `<db>.lock`（共享模式 0），SQLite 自身锁只做兜底；`status`/UI 走只读连接。
 - 批量写入约定：先清空目标键区间，再用普通 `INSERT` + 256 行多行 VALUES。
@@ -340,7 +355,7 @@ FatTrace/
 - 保留删除边界：只删库内历史，绝不删除被扫描文件。
 - 告警通道：周报横幅 / 本地通知 / 状态页，默认不弹窗。
 
-开发样本：`D:\FatTraceDemo\.cache\fattrace\fattrace.db` 现有 D: 卷根 #2/#3/#9/#10（#9 为 M7 maintain 手工运行、#10 为 2026-10-29 计划任务实跑，466,199 文件 / 242.54 GiB）、工作区 #7/#8（M6 解释率样本），#4 partial、#5 failed 用于异常路径；#1/#6 为早期子目录快照。库内已有 `daily_summary` 2026-10-28 / 2026-10-29（后者已更新为 #3→#10）、`file_events` 51 行、`alert_state` 1 行（受控低阈值测试留下，默认阈值下不触发）；同目录 `config.yaml`（roots `D:\`，默认保留与告警）与 `tasks/` XML 为验证产物。**计划任务保持安装**：`FatTrace-Daily` 下次 2026-10-30 03:00，`FatTrace-Weekly` 下次 2026-11-01 04:00。
+开发样本：`D:\FatTraceDemo\.cache\fattrace\fattrace.db` 现有 D: 卷根 #2/#3/#9/#10（#9 为 M7 maintain 手工运行、#10 为 2026-10-29 计划任务实跑，466,199 文件 / 242.54 GiB）、工作区 #7/#8（M6 解释率样本），#4 partial、#5 failed 用于异常路径；#1/#6 为早期子目录快照。库内已有 `daily_summary` 2026-10-28 / 2026-10-29（后者已更新为 #3→#10）、`file_events` 51 行、`alert_state` 1 行（受控低阈值测试留下，默认阈值下不触发）；同目录 `config.yaml`（roots `D:\`，M7b 起 `daily_file_days=7` / `weekly_file_weeks=3` / `auto_prune=true`；真实库尚无 >7 天快照，未执行删除）与 `tasks/` XML 为验证产物。**计划任务保持安装**：`FatTrace-Daily` 下次 2026-10-30 03:00，`FatTrace-Weekly` 下次 2026-11-01 04:00。
 
 ### M7 定案（已实现）
 
@@ -348,9 +363,19 @@ FatTrace/
 - **任务不提权**：`InteractiveToken + LeastPrivilege`，任务可见文件与手工 `fat snap` 一致；需要全盘可见性时按风险节把二进制放受控路径再提权安装。
 - **日汇总口径**：只认卷根 complete；按本地日取最后一条，基线为“之前最近有数据那天最后一条”，无前日则当天第一条；单快照日增量 0。
 - **告警去重**：状态键 `growth:<volume_id>`；静默期内只更新 `last_value` 不重复 fire；server 只读预览绝不写状态。
-- **保留边界**：只删库内 daily/weekly 快照与汇总/事件行；manual、每组最新、running 永不动；默认 dry-run，`auto_prune` 默认关闭。
+- **保留边界**：只删库内 daily/weekly 快照、文件明细与汇总/事件行；manual、每组最新、running 永不动；默认 dry-run，`auto_prune` 默认关闭（M7b 起实例已启用）。
 - **配置 fail-loud**：未知字段、非法时间、相对根直接失败，避免拼写错误静默生效。
 - **验收口径**：真实两日样本 99.37% 仅作趋势证据；真实一周解释率门禁待计划任务累积后复核，不得用两日数据替代。
+
+### M7b 定案（已实现）
+
+- **只降采样文件行，不降采样目录历史**：`snap_files` 按日 7 天 / 周 3 周清理；`snapshots`、`snap_dirs` 继续 30 天 / 365 天，保证时间轴与目录下钻长期可用。
+- **每类最新两个快照保护**：按 `(volume, root, kind)` 分组，daily 与 weekly 各自最新两个 complete 快照保留文件行，最近两快照 diff 永远可用；manual 永不清理。
+- **过期是显式状态，不是空数据**：文件行被清理后 diff 明确报 retention 错误；下钻 API 返回 `files_expired`，SPA 提示仅剩目录聚合。
+- **自动周报宁可跳过也不造假**：只取同根最近两个 complete weekly，跨度 <5 天跳过；报告在 prune 前生成；文件名含 root 哈希，同卷多 root 不覆盖。
+- **维护日志与扫描解耦**：日志打开失败只警告，不阻断扫描；`--quiet` 仍写日志；5 MiB × 3 轮转。
+- **auto_prune 扩大但默认不变**：daily 与 weekly maintain 都会清理，但默认仍 `false`；实例在真实副本验证后设为 `true`，真实库当前无过期行，首次实际删除发生在 2026-11-05 之后。
+- **日汇总重算窗口改为 3 天**：与 7 天文件行保留匹配，避免 maintain 重算触碰已清理快照。
 
 ## 6. 关键实现细节 / 坑
 
@@ -418,7 +443,14 @@ FatTrace/
 - 日汇总只认卷根 complete 快照；子目录、partial、failed 都不参与；`from_snapshot_id` 可能跨多日（中间没扫描时一天覆盖多日增量）。
 - `daily` 的 `--days N` 只重算最近 N 天且幂等（先删该日旧行再写），不会清理窗口外的旧汇总；清理归 `prune`。
 - `prune` 按快照 `started_at` 判断过期；manual、每个 `(volume, root)` 最新、`running` 永不删；`--apply` 不可逆且会 checkpoint WAL，先 dry-run。
-- `auto_prune` 只在 `maintain --kind weekly` 尾部执行；daily maintain 不清理。
+- `auto_prune` 在 daily 与 weekly maintain 末尾都会执行；文件行按 cutoff 删除，完整快照仍按 30/365 天保留。
+- `SnapshotFilePruneCandidates` 的保护粒度是 `(volume, root, kind)` 最新两个 complete 快照；daily/weekly 必须分开计，合并 root 或 kind 会多删可对比的文件行。
+- 文件行被清理的快照 `files` 元数据仍 >0；diff 必须先 `CountSnapshotFiles`，否则空 from 索引会把所有文件误报成新增。
+- `fat prune --apply` 可能只删 `snap_files` 不删快照（`Deleted.FileRows > 0`、`Deleted.Snapshots = 0`）；这是正常的文件明细降采样，不是快照删除。
+- weekly 报告只在 `maintain --kind weekly` 生成，要求同根最新两个 complete weekly 跨度 ≥5 天；手工连续运行不会产生假周报。
+- 周报文件名 = `weekly-<volumeID>-<date>-<rootLabel>-<rootHash>.html`；root 哈希不可去掉，否则同卷多根会互相覆盖。
+- maintain 日志固定 `<db_dir>/logs/maintain.log`（5 MiB × 3）；日志打开失败只警告，不改变退出码。
+- maintain 的日汇总窗口是 3 天，与 7 天文件行保留匹配；`fat daily` CLI 默认仍是 14 天，手工重算更早日期前要确认对应快照文件行仍在。
 - 配置是严格 YAML：未知字段/非法时间/相对 roots 会让 `diff`/`report`/`serve`/`maintain` 一起启动失败；`config.yaml` 与 `rules.yaml` 都在 `<db_dir>`，`fat config init` 默认不覆盖（需 `--force`）。
 - Task Scheduler XML 的元素顺序是规范的一部分（`Settings` 内顺序错会被 `schtasks` 拒绝），必须 UTF-16LE + BOM；用 `encoding/xml` 生成后再转码，别手拼字符串。
 - Git Bash 调 `schtasks` 用 `//Query`（避免 MSYS 把 `/Query` 转成路径）；任务名输出为 GBK，读取时需 `iconv -f GBK -t UTF-8`。
@@ -433,7 +465,8 @@ FatTrace/
 - 计划任务提权时，二进制必须放 `%ProgramFiles%\FatTrace\` 并限制 ACL；配置/DB 放 `%LOCALAPPDATA%`，任务不能指向用户可写目录。当前实现默认**不提权**：`InteractiveToken + LeastPrivilege`，任务可见范围与手工 `fat snap` 相同。
 - 本地 server 仅绑 `127.0.0.1`，随机端口 + 每会话 token；快照含全盘路径，不云同步。
 - 删除类建议只给路径与预期收益，不自动执行。
-- `fat prune --apply` 会不可逆地删除 FatTrace 库内快照/汇总（不碰用户文件）；`auto_prune` 默认关闭，开启前先跑 dry-run 看报告。
+- `fat prune --apply` 会不可逆地删除 FatTrace 库内快照/文件明细/汇总（不碰用户文件）；实例 `auto_prune` 已开启（daily/weekly），首次真实清理预计 2026-11-05 之后；执行前可先 `fat prune` dry-run，重大保留期调整先在副本验证。
+- `<db_dir>/reports/weekly-*.html` 与 `<db_dir>/logs/maintain.log` 含完整路径/卷信息，按本地敏感数据对待，不要随意外发。
 - `config.yaml` 与 `rules.yaml` 都位于 DB 目录且会被 CLI/report/serve 读取；不要从不可信目录加载，改动后重启进程。
 - 计划任务执行时用户需已登录（InteractiveToken）；注销/关机期间不会运行，恢复后最多补跑一次。
 - `rules.yaml` 只描述匹配与标签，不执行代码；读取时 `KnownFields(true)` + 严格校验，避免用户配置成为注入面。
@@ -443,7 +476,7 @@ FatTrace/
 
 新对话可以直接发：
 
-> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`，从 M7 验收复核（真实一周样本、调度任务实际运行、告警与保留）继续 FatTrace 项目。保持“所有工具/缓存都在工作区”的原则。
+> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`，从 M7b 收尾与 M7 门禁复核（真实一周样本、首次文件行清理、首份周报、14 天无人值守）继续 FatTrace 项目。保持“所有工具/缓存都在工作区”的原则。
 
 接手后先跑：
 
@@ -462,7 +495,9 @@ DB='D:\FatTraceDemo\.cache\fattrace\fattrace.db'
 ./fat.exe alerts --db "$DB"
 ./fat.exe prune --db "$DB"
 ./fat.exe schedule status --db "$DB"
+tail -n 30 'D:\FatTraceDemo\.cache\fattrace\logs\maintain.log'
+dir 'D:\FatTraceDemo\.cache\fattrace\reports'
 ./fat.exe serve --db "$DB" --addr 127.0.0.1:0
 ```
 
-确认测试全绿、`fat diff`/`fat report`/`fat serve` 能复现 `docs/m3`–`docs/m7` 的输出（`#7→#8` 解释率 93.63%，`#3→#9` 99.37%，规则页 69 条），再检查 `docs/m7-results.md` 里“真实一周待复核”的门禁。若已积累 ≥7 天计划任务数据，用 `fat daily --days 0` 重算并据实更新文档。
+确认测试全绿、`fat diff`/`fat report`/`fat serve` 能复现 `docs/m3`–`docs/m7b` 的输出（`#7→#8` 解释率 93.63%，`#3→#9` 99.37%，规则页 69 条），再检查 `docs/m7-results.md` / `docs/m7b-results.md` 里“真实一周待复核”“首批文件行清理”的门禁。若已积累 ≥7 天计划任务数据，用 `fat daily --days 3` 重算并按实际结果更新文档；首份真实的 weekly 报告预计 2026-11-08。

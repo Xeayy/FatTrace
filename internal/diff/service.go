@@ -37,6 +37,12 @@ func Run(ctx context.Context, st *store.Store, opts Options) (model.DiffResult, 
 	if err := validatePair(from, to); err != nil {
 		return model.DiffResult{}, err
 	}
+	if err := ensureFileRows(ctx, st, from); err != nil {
+		return model.DiffResult{}, err
+	}
+	if err := ensureFileRows(ctx, st, to); err != nil {
+		return model.DiffResult{}, err
+	}
 
 	fromFiles, err := st.LoadSnapshotFileIndex(ctx, from.ID)
 	if err != nil {
@@ -143,6 +149,23 @@ func validatePair(from, to store.SnapshotInfo) error {
 	}
 	if from.StartedAt > to.StartedAt {
 		return fmt.Errorf("diff: from snapshot #%d is newer than to snapshot #%d", from.ID, to.ID)
+	}
+	return nil
+}
+
+// ensureFileRows rejects snapshots whose snap_files rows were removed by the
+// retention policy. Returning an explicit error beats silently reporting every
+// file as added after an empty from-index.
+func ensureFileRows(ctx context.Context, st *store.Store, sn store.SnapshotInfo) error {
+	if sn.Files <= 0 {
+		return nil
+	}
+	n, err := st.CountSnapshotFiles(ctx, []int64{sn.ID})
+	if err != nil {
+		return fmt.Errorf("count snapshot #%d files: %w", sn.ID, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("diff: snapshot #%d file rows were removed by retention; choose a pair within the file retention window", sn.ID)
 	}
 	return nil
 }

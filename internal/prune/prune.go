@@ -25,17 +25,22 @@ type Snapshot struct {
 
 // Report describes what a prune run found or deleted.
 type Report struct {
-	Applied        bool       `json:"applied"`
-	DailyCutoff    string     `json:"daily_snapshot_cutoff,omitempty"`
-	WeeklyCutoff   string     `json:"weekly_snapshot_cutoff,omitempty"`
-	SummaryCutoff  string     `json:"daily_summary_cutoff,omitempty"`
-	EventsCutoffMS int64      `json:"file_events_cutoff_ms,omitempty"`
-	Snapshots      []Snapshot `json:"snapshots"`
-	Summaries      int64      `json:"daily_summaries"`
-	TopDirs        int64      `json:"daily_top_dirs"`
-	FileEvents     int64      `json:"file_events"`
-	Deleted        struct {
+	Applied          bool       `json:"applied"`
+	DailyCutoff      string     `json:"daily_snapshot_cutoff,omitempty"`
+	WeeklyCutoff     string     `json:"weekly_snapshot_cutoff,omitempty"`
+	DailyFileCutoff  string     `json:"daily_file_cutoff,omitempty"`
+	WeeklyFileCutoff string     `json:"weekly_file_cutoff,omitempty"`
+	SummaryCutoff    string     `json:"daily_summary_cutoff,omitempty"`
+	EventsCutoffMS   int64      `json:"file_events_cutoff_ms,omitempty"`
+	Snapshots        []Snapshot `json:"snapshots"`
+	FileSnapshotIDs  []int64    `json:"file_snapshot_ids,omitempty"`
+	FileRows         int64      `json:"file_rows"`
+	Summaries        int64      `json:"daily_summaries"`
+	TopDirs          int64      `json:"daily_top_dirs"`
+	FileEvents       int64      `json:"file_events"`
+	Deleted          struct {
 		Snapshots  int64 `json:"snapshots"`
+		FileRows   int64 `json:"file_rows"`
 		Summaries  int64 `json:"daily_summaries"`
 		TopDirs    int64 `json:"daily_top_dirs"`
 		FileEvents int64 `json:"file_events"`
@@ -51,11 +56,19 @@ func Run(ctx context.Context, st *store.Store, cfg config.Retention, apply bool,
 	rep := Report{Applied: apply, Snapshots: []Snapshot{}}
 	dailyBefore := cutoff(now, cfg.DailySnapshotsDays)
 	weeklyBefore := cutoff(now, cfg.WeeklySnapshotsDays)
+	dailyFileBefore := cutoff(now, cfg.DailyFileDays)
+	weeklyFileBefore := cutoff(now, cfg.WeeklyFileWeeks*7)
 	if dailyBefore > 0 {
 		rep.DailyCutoff = time.UnixMilli(dailyBefore).Local().Format("2006-01-02 15:04")
 	}
 	if weeklyBefore > 0 {
 		rep.WeeklyCutoff = time.UnixMilli(weeklyBefore).Local().Format("2006-01-02 15:04")
+	}
+	if dailyFileBefore > 0 {
+		rep.DailyFileCutoff = time.UnixMilli(dailyFileBefore).Local().Format("2006-01-02 15:04")
+	}
+	if weeklyFileBefore > 0 {
+		rep.WeeklyFileCutoff = time.UnixMilli(weeklyFileBefore).Local().Format("2006-01-02 15:04")
 	}
 
 	cands, err := st.PruneSnapshotCandidates(ctx, dailyBefore, weeklyBefore)
@@ -63,12 +76,33 @@ func Run(ctx context.Context, st *store.Store, cfg config.Retention, apply bool,
 		return rep, err
 	}
 	var ids []int64
+	fullDelete := make(map[int64]bool, len(cands))
 	for _, sn := range cands {
 		ids = append(ids, sn.ID)
+		fullDelete[sn.ID] = true
 		rep.Snapshots = append(rep.Snapshots, Snapshot{
 			ID: sn.ID, Kind: sn.Kind, Root: sn.Root, StartedAtMS: sn.StartedAt,
 			Files: sn.Files, Dirs: sn.Dirs, UniqueAllocBytes: sn.UniqueAllocBytes,
 		})
+	}
+
+	fileCands, err := st.SnapshotFilePruneCandidates(ctx, dailyFileBefore, weeklyFileBefore)
+	if err != nil {
+		return rep, err
+	}
+	var fileIDs []int64
+	for _, sn := range fileCands {
+		if fullDelete[sn.ID] {
+			continue
+		}
+		fileIDs = append(fileIDs, sn.ID)
+	}
+	rep.FileSnapshotIDs = fileIDs
+	if len(fileIDs) > 0 {
+		rep.FileRows, err = st.CountSnapshotFiles(ctx, fileIDs)
+		if err != nil {
+			return rep, err
+		}
 	}
 
 	summaryCutoff := ""
@@ -93,6 +127,13 @@ func Run(ctx context.Context, st *store.Store, cfg config.Retention, apply bool,
 		return rep, nil
 	}
 
+	if len(fileIDs) > 0 {
+		n, err := st.DeleteSnapshotFiles(ctx, fileIDs)
+		if err != nil {
+			return rep, fmt.Errorf("delete snapshot files: %w", err)
+		}
+		rep.Deleted.FileRows = n
+	}
 	if len(ids) > 0 {
 		n, err := st.DeleteSnapshots(ctx, ids)
 		if err != nil {

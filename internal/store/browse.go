@@ -50,6 +50,7 @@ type DirListing struct {
 	FilesTotal     int64        `json:"files_total"`
 	DirsTruncated  bool         `json:"dirs_truncated,omitempty"`
 	FilesTruncated bool         `json:"files_truncated,omitempty"`
+	FilesExpired   bool         `json:"files_expired,omitempty"`
 }
 
 const dirNodeSelectSQL = `SELECT frn, parent_frn, name, depth, total_bytes, total_alloc_bytes,
@@ -104,6 +105,13 @@ func (s *Store) BrowseDir(ctx context.Context, snapshotID int64, frn uint64, dir
 	}
 
 	res := DirListing{Snapshot: sn, Dir: dir, Breadcrumb: crumb, Path: dirPath(crumb)}
+	if sn.Files > 0 {
+		n, err := s.CountSnapshotFiles(ctx, []int64{snapshotID})
+		if err != nil {
+			return DirListing{}, err
+		}
+		res.FilesExpired = n == 0
+	}
 
 	if err := s.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM snap_dirs WHERE snapshot_id = ? AND parent_frn = ?`,

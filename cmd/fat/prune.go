@@ -59,6 +59,8 @@ func printPrune(rep prune.Report) {
 	fmt.Printf("mode:             %s\n", mode)
 	fmt.Printf("daily cutoff:     %s\n", orDash(rep.DailyCutoff))
 	fmt.Printf("weekly cutoff:    %s\n", orDash(rep.WeeklyCutoff))
+	fmt.Printf("daily files:      %s\n", orDash(rep.DailyFileCutoff))
+	fmt.Printf("weekly files:     %s\n", orDash(rep.WeeklyFileCutoff))
 	fmt.Printf("summary cutoff:   %s\n", orDash(rep.SummaryCutoff))
 	if rep.EventsCutoffMS > 0 {
 		fmt.Printf("events cutoff:    %s\n", formatMillis(rep.EventsCutoffMS))
@@ -69,12 +71,14 @@ func printPrune(rep prune.Report) {
 			sn.ID, sn.Kind, sn.Root, formatMillis(sn.StartedAtMS), sn.Files, sn.Dirs,
 			formatBytes(sn.UniqueAllocBytes))
 	}
+	fmt.Printf("file snapshots:   %d (%d rows)\n", len(rep.FileSnapshotIDs), rep.FileRows)
 	fmt.Printf("daily summaries:  %d\n", rep.Summaries)
 	fmt.Printf("daily top dirs:   %d\n", rep.TopDirs)
 	fmt.Printf("file events:      %d\n", rep.FileEvents)
 	if rep.Applied {
-		fmt.Printf("deleted:          snapshots=%d summaries=%d top_dirs=%d events=%d\n",
-			rep.Deleted.Snapshots, rep.Deleted.Summaries, rep.Deleted.TopDirs, rep.Deleted.FileEvents)
+		fmt.Printf("deleted:          snapshots=%d file_rows=%d summaries=%d top_dirs=%d events=%d\n",
+			rep.Deleted.Snapshots, rep.Deleted.FileRows,
+			rep.Deleted.Summaries, rep.Deleted.TopDirs, rep.Deleted.FileEvents)
 	}
 	fmt.Println("note: retention only deletes FatTrace history; scanned files are never touched.")
 }
