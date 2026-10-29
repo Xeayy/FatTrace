@@ -305,6 +305,10 @@ canvas.sparkline { display: block; width: 100%; height: 120px; }
 }
 .error-box b { display: block; margin-bottom: 4px; font-size: 15px; }
 
+.panel h3 { font-size: 14px; margin: 16px 0 6px; }
+.panel h3:first-child { margin-top: 0; }
+.daily-dirs { font-size: 12px; line-height: 1.5; color: #c6d0dc; }
+
 .rules h3 { font-size: 14px; margin: 18px 0 6px; }
 .rules h3:first-child { margin-top: 0; }
 .rules p { margin: 4px 0; color: #c6d0dc; font-size: 13px; }

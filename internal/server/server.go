@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"fattrace/internal/config"
 	"fattrace/internal/model"
 	"fattrace/internal/rules"
 	"fattrace/internal/store"
@@ -44,6 +45,7 @@ type Server struct {
 	dirLimit  int
 	fileLimit int
 	rules     *rules.Set
+	cfg       config.Config
 	mux       *http.ServeMux
 
 	assets map[string]staticAsset
@@ -89,6 +91,10 @@ func New(st *store.Store, opts Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	cfg, err := config.Load(st.Path())
+	if err != nil {
+		return nil, err
+	}
 	s := &Server{
 		st:        st,
 		token:     opts.Token,
@@ -96,6 +102,7 @@ func New(st *store.Store, opts Options) (*Server, error) {
 		dirLimit:  opts.DirLimit,
 		fileLimit: opts.FileLimit,
 		rules:     set,
+		cfg:       cfg,
 		mux:       http.NewServeMux(),
 		assets:    map[string]staticAsset{},
 		diffCache: map[diffKey]model.DiffResult{},
@@ -112,6 +119,9 @@ func New(st *store.Store, opts Options) (*Server, error) {
 	s.mux.HandleFunc("GET /api/snapshots", s.auth(s.handleSnapshots))
 	s.mux.HandleFunc("GET /api/diff", s.auth(s.handleDiff))
 	s.mux.HandleFunc("GET /api/rules", s.auth(s.handleRules))
+	s.mux.HandleFunc("GET /api/config", s.auth(s.handleConfig))
+	s.mux.HandleFunc("GET /api/daily", s.auth(s.handleDaily))
+	s.mux.HandleFunc("GET /api/alerts", s.auth(s.handleAlerts))
 	s.mux.HandleFunc("GET /api/dir", s.auth(s.handleDir))
 	s.mux.HandleFunc("GET /api/trend", s.auth(s.handleTrend))
 	return s, nil
@@ -200,12 +210,6 @@ func withHeaders(next http.Handler) http.Handler {
 		h.Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
 	})
-}
-
-// listenAddress aliases the listener type so Serve does not depend on net in
-// its signature docs; it is always a *net.TCPListener on loopback.
-type listenAddress = interface {
-	Accept() (c any, err error)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

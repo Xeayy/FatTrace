@@ -8,7 +8,9 @@ import (
 	"net/url"
 	"strconv"
 
+	"fattrace/internal/alerts"
 	"fattrace/internal/diff"
+	"fattrace/internal/model"
 	"fattrace/internal/rules"
 	"fattrace/internal/store"
 )
@@ -89,6 +91,53 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRules(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.rules)
+}
+
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.cfg)
+}
+
+type dailyRow struct {
+	model.DailySummary
+	TopDirs []model.DailyTopDir `json:"top_dirs,omitempty"`
+}
+
+func (s *Server) handleDaily(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	volID, err := queryInt64(q, "volume")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	limit, err := queryInt(q, "limit", 90, 1, 365)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	list, err := s.st.ListDailySummaries(r.Context(), volID, limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	rows := make([]dailyRow, 0, len(list))
+	for _, d := range list {
+		dirs, err := s.st.DailyTopDirs(r.Context(), d.VolumeID, d.Day, 5)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		rows = append(rows, dailyRow{DailySummary: d, TopDirs: dirs})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"days": rows})
+}
+
+func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
+	rep, err := alerts.Evaluate(r.Context(), s.st, s.cfg.Alerts, alerts.Options{Persist: false})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, rep)
 }
 
 // latestSnapshotID participates in auto-pair cache keys so a fresh scan does

@@ -607,6 +607,18 @@ function diffBanners(D) {
   }
 }
 
+function alertBanners(rep) {
+  for (const a of rep.alerts || []) {
+    if (!a.triggered) continue;
+    if (a.muted) {
+      addBanner("info", "增长告警已静默",
+        a.message + " · 静默至 " + fmtDate(a.muted_until_ms));
+    } else {
+      addBanner("danger", "增长告警", a.message);
+    }
+  }
+}
+
 function ruleBadge(rule) {
   if (!rule) return null;
   const b = el("span", "badge rule" + (rule.confidence === "low" ? " low" : ""),
@@ -864,8 +876,12 @@ function sparkPanel(title, subtitle, points) {
 }
 
 async function viewOverview(root) {
-  const D = await api("diff");
+  const [D, alertRep] = await Promise.all([
+    api("diff"),
+    api("alerts").catch(() => ({ alerts: [] })),
+  ]);
   renderDiff(root, D);
+  alertBanners(alertRep);
   try {
     const trend = await api("trend", { volume: D.volume_id, limit: 8 });
     root.appendChild(sparkPanel("趋势 · " + D.root, "最近 " + trend.points.length + " 次完整卷根快照的唯一实占",
@@ -1045,9 +1061,10 @@ async function viewCompare(root, params) {
 }
 
 async function viewTimeline(root) {
-  const [st, snapsResp] = await Promise.all([
+  const [st, snapsResp, dailyResp] = await Promise.all([
     api("status"),
     api("snapshots", { limit: 300 }),
+    api("daily", { limit: 90 }).catch(() => ({ days: [] })),
   ]);
   const snaps = snapsResp.snapshots;
   const volumes = st.volumes || [];
@@ -1062,6 +1079,8 @@ async function viewTimeline(root) {
       "卷 #" + v.id + (v.label ? " · " + v.label : "") + " · 最近 " + pts.length + " 次完整卷根快照",
       pts));
   });
+
+  root.appendChild(dailyPanel(dailyResp.days || []));
 
   const p = panel("快照时间轴", fmtCount(snaps.length) + " 条记录");
   const rows = [];
@@ -1101,8 +1120,144 @@ async function viewTimeline(root) {
   root.appendChild(p);
 }
 
+function dailyPanel(days) {
+  const p = panel("日汇总", "每个本地日取最后一次完整卷根快照；基线是上一个有数据的日的最后一次快照，首日以当日首次快照为基线");
+  if (!days.length) {
+    p.appendChild(el("div", "empty", "还没有日汇总。运行 fat daily，或等待每日计划任务后生成。"));
+    return p;
+  }
+  const rows = days.map((d) => {
+    const rootCell = el("td", "path");
+    rootCell.appendChild(document.createTextNode(d.root || ("卷 " + d.volume_id)));
+    if (d.errors) rootCell.appendChild(el("span", "badge unknown", d.errors + " 错误"));
+    if (d.coverage_pct > 0 && d.coverage_pct < 95) {
+      rootCell.appendChild(el("span", "badge unknown", "覆盖 " + fmtPct(d.coverage_pct)));
+    }
+    const dirs = el("div", "daily-dirs");
+    for (const t of (d.top_dirs || []).slice(0, 3)) {
+      const line = el("div");
+      line.appendChild(el("span", "dim", signedBytes(t.delta_bytes) + "  "));
+      line.appendChild(document.createTextNode(t.path));
+      dirs.appendChild(line);
+    }
+    if (!dirs.childNodes.length) dirs.appendChild(el("span", "dim", "—"));
+    return [
+      td(d.day),
+      rootCell,
+      td(signedBytes(d.delta_bytes), "num " + signClass(d.delta_bytes)),
+      td(fmtBytes(d.growth_bytes), "num"),
+      td(d.growth_bytes > 0 ? fmtPct(d.explained_pct) : "—",
+        "num" + (d.growth_bytes > 0 && d.explained_pct < 70 ? " warn" : "")),
+      tdNode(dirs, "path"),
+    ];
+  });
+  p.appendChild(dataTable([
+    { label: "日期" }, { label: "根" }, { label: "净增长", num: true },
+    { label: "增长量", num: true }, { label: "解释率", num: true }, { label: "Top 目录" },
+  ], rows));
+  return p;
+}
+
+function alertsPanel(rep) {
+  const list = rep.alerts || [];
+  const fired = list.filter((a) => a.triggered).length;
+  const p = panel("增长告警", list.length ? fired + " / " + list.length + " 个卷超阈值" : "");
+  if (!list.length) {
+    p.appendChild(el("div", "empty",
+      "没有可评估的告警：需要至少一天的日汇总，且 config.yaml 的 alerts 阈值非零。"));
+    return p;
+  }
+  const thLabel = (a) => {
+    const parts = [];
+    if (a.threshold_bytes > 0) parts.push(fmtBytes(a.threshold_bytes));
+    if (a.threshold_pct > 0) parts.push(a.threshold_pct.toFixed(1) + "%");
+    return parts.join(" / ") || "—";
+  };
+  const rows = list.map((a) => {
+    let state;
+    if (!a.triggered) state = el("span", "pos", "正常");
+    else if (a.muted) state = el("span", "warn", "静默中");
+    else state = el("span", "danger", "已触发");
+    const when = a.muted ? "至 " + fmtDate(a.muted_until_ms)
+      : (a.last_fired_at_ms ? fmtDate(a.last_fired_at_ms) : "—");
+    return [
+      td(a.root || ("卷 " + a.volume_id), "path"),
+      td(a.day || "—", "dim"),
+      tdNode(state),
+      td(signedBytes(a.value_bytes), "num " + signClass(a.value_bytes)),
+      td(fmtBytes(a.used_bytes), "num"),
+      td(thLabel(a), "num"),
+      td(when, "dim"),
+      td(fmtCount(a.hits), "num"),
+    ];
+  });
+  p.appendChild(dataTable([
+    { label: "根" }, { label: "日期" }, { label: "状态" }, { label: "实测净增长", num: true },
+    { label: "已用", num: true }, { label: "阈值", num: true }, { label: "最近提醒 / 静默至" }, { label: "命中", num: true },
+  ], rows));
+  p.appendChild(el("div", "notice",
+    "比较对象是每日净增长（实占）。静默只压制重复提醒，不会隐藏超阈值事实；服务端展示为只读预览，不写告警状态。"));
+  return p;
+}
+
+function configPanel(cfg) {
+  const p = panel("调度、保留与告警", "只读展示数据库同目录的 config.yaml");
+  if (cfg.exists) {
+    p.appendChild(el("div", "notice", "已加载 " + cfg.path));
+  } else {
+    p.appendChild(el("div", "notice",
+      "未找到 " + cfg.path + "，显示内置默认值。运行 fat config init 生成配置文件。"));
+  }
+  const grid = el("div", "grid-2");
+
+  const sched = cfg.schedule || {};
+  const roots = sched.roots || [];
+  const ps = el("div");
+  ps.appendChild(el("h3", null, "计划任务"));
+  ps.appendChild(dataTable(
+    [{ label: "项目" }, { label: "值" }],
+    [
+      [td("扫描根", "dim"), td(roots.length ? roots.join("、") : "未配置（不会安装计划任务）",
+        roots.length ? "path" : "warn")],
+      [td("每日", "dim"), td(sched.daily_at || "—")],
+      [td("每周", "dim"), td(sched.weekly_at || "—")],
+      [td("安装 / 查看", "dim"), td("fat schedule install · fat schedule status")],
+    ]));
+  grid.appendChild(ps);
+
+  const ret = cfg.retention || {};
+  const pr = el("div");
+  pr.appendChild(el("h3", null, "保留（仅 FatTrace 自身历史）"));
+  pr.appendChild(dataTable(
+    [{ label: "项目" }, { label: "保留" }],
+    [
+      [td("每日快照", "dim"), td(ret.daily_snapshots_days + " 天")],
+      [td("每周快照", "dim"), td(ret.weekly_snapshots_days + " 天")],
+      [td("每日汇总", "dim"), td(ret.daily_summary_days + " 天")],
+      [td("文件事件", "dim"), td(ret.file_events_days + " 天")],
+      [td("自动清理", "dim"), td(ret.auto_prune ? "开启（随每周任务）" : "关闭",
+        ret.auto_prune ? "warn" : "dim")],
+    ]));
+  grid.appendChild(pr);
+
+  const al = cfg.alerts || {};
+  const pa = el("div");
+  pa.appendChild(el("h3", null, "增长告警"));
+  pa.appendChild(dataTable(
+    [{ label: "项目" }, { label: "阈值" }],
+    [
+      [td("单日净增长", "dim"), td(al.growth_bytes > 0 ? fmtBytes(al.growth_bytes) : "关闭")],
+      [td("占已用比例", "dim"), td(al.growth_pct > 0 ? al.growth_pct.toFixed(1) + "%" : "关闭")],
+      [td("静默窗口", "dim"), td(al.silence_hours + " 小时")],
+    ]));
+  grid.appendChild(pa);
+
+  p.appendChild(grid);
+  return p;
+}
+
 async function viewRules(root) {
-  const data = await api("rules");
+  const [data, cfg] = await Promise.all([api("rules"), api("config")]);
   const rules = data.rules || [];
   const p = panel("解释规则",
     fmtCount(rules.length) + " 条（内置 " + fmtCount(data.rules_builtin) +
@@ -1139,6 +1294,8 @@ async function viewRules(root) {
   p.appendChild(wrap);
   root.appendChild(p);
 
+  root.appendChild(configPanel(cfg));
+
   const policy = panel("口径与边界");
   const box = el("div", "rules");
   const section = (title, text, list) => {
@@ -1174,13 +1331,21 @@ async function viewRules(root) {
     "默认配对：最新 complete 卷根 + 同卷同根的上一个 complete。",
   ]);
   section("卷级校验", "|根 Δ − 卷 Δ| / max(|卷 Δ|, 1% × 已用) < 2% 记为通过；非卷根或缺卷用量时跳过，不算失败。");
-  section("保留策略（计划）", "目录聚合保留 52 周、每日汇总 90 天、Top 事件 8 周；告警阈值与静默窗口在后续里程碑提供配置。");
+  section("保留与告警", null, [
+    "保留只作用于 FatTrace 自己的数据库历史，从不触碰被扫描的文件。",
+    "每个卷根始终保留最新一次快照；手动快照与运行中的快照不会被清理。fat prune 默认 dry-run，仅 --apply 才删除。",
+    "自动清理默认关闭，开启后随每周任务在生成周报之后执行。",
+    "告警比较每日净增长；超阈值重复出现只提醒一次，静默窗口结束后才再次提醒。",
+  ]);
   policy.appendChild(box);
   root.appendChild(policy);
 }
 
 async function viewStatus(root) {
-  const st = await api("status");
+  const [st, alertRep] = await Promise.all([
+    api("status"),
+    api("alerts").catch((err) => ({ alerts: [], error: err.message })),
+  ]);
   const grid = el("div", "status-grid");
 
   const pd = panel("数据库");
@@ -1205,6 +1370,14 @@ async function viewStatus(root) {
     ])));
   grid.appendChild(pv);
   root.appendChild(grid);
+
+  if (alertRep.error) {
+    const pe = panel("增长告警");
+    pe.appendChild(el("div", "empty", "告警评估失败：" + alertRep.error));
+    root.appendChild(pe);
+  } else {
+    root.appendChild(alertsPanel(alertRep));
+  }
 
   const pt = panel("表行数", fmtCount((st.tables || []).length) + " 张表");
   pt.appendChild(dataTable(

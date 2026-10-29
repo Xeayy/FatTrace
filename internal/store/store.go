@@ -15,13 +15,16 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-//go:embed schema.sql schema_v2.sql
+//go:embed schema.sql schema_v2.sql schema_v3.sql
 var schemaFS embed.FS
 
-const schemaVersion = 2
+const schemaVersion = 3
+
+// CurrentSchemaVersion is the schema revision this binary migrates to.
+const CurrentSchemaVersion = schemaVersion
 
 // migrations[i] upgrades the schema from version i to i+1.
-var migrations = []string{mustRead("schema.sql"), mustRead("schema_v2.sql")}
+var migrations = []string{mustRead("schema.sql"), mustRead("schema_v2.sql"), mustRead("schema_v3.sql")}
 
 var (
 	// ErrLocked means another process holds the writer lock for this database.
