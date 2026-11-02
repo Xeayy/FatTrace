@@ -198,6 +198,43 @@ func TestServiceCrossVolumeAnnotation(t *testing.T) {
 	}
 }
 
+func TestServiceCrossVolumeCandidatesUseVolumeRootSnapshot(t *testing.T) {
+	st := newStore(t)
+	ctx := context.Background()
+	vol1, err := st.EnsureVolume(ctx, 0xAAAA, "NTFS", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	vol2, err := st.EnsureVolume(ctx, 0xBBBB, "NTFS", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mtime := time.UnixMilli(1_700_000_123_000)
+	from := seedSnapshot(t, st, vol1, `D:\`, "complete", 0,
+		[]model.FileRecord{rootDir(1, `D:\`)})
+	to := seedSnapshot(t, st, vol1, `D:\`, "complete", 8192, []model.FileRecord{
+		rootDir(1, `D:\`),
+		{FRN: 10, ParentFRN: 1, Name: "move.bin", Size: 5000, AllocSize: 8192, MTime: mtime},
+	})
+	seedSnapshot(t, st, vol2, `E:\`, "complete", 8192, []model.FileRecord{
+		rootDir(50, `E:\`),
+		{FRN: 60, ParentFRN: 50, Name: "move.bin", Size: 5000, AllocSize: 8192, MTime: mtime},
+	})
+	// A newer subdirectory snapshot must not hide the volume-root candidates.
+	seedSnapshot(t, st, vol2, `E:\other`, "complete", 0, []model.FileRecord{
+		{FRN: 51, ParentFRN: 0, Name: `E:\other`, IsDir: true},
+	})
+
+	res, err := Run(ctx, st, Options{FromID: from, ToID: to, CrossVolume: true})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	got := findFile(t, res.TopGrowth, 10)
+	if got.SuspectedFromVolume != 0xBBBB {
+		t.Fatalf("suspected volume = %#x, want 0xBBBB", got.SuspectedFromVolume)
+	}
+}
+
 func TestServiceRejectsExpiredFileRows(t *testing.T) {
 	base := []model.FileRecord{
 		rootDir(1, `D:\`),

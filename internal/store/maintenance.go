@@ -258,7 +258,12 @@ func (s *Store) PruneSnapshotCandidates(ctx context.Context, dailyBefore, weekly
 	groupKey := func(sn SnapshotInfo) string {
 		return fmt.Sprintf("%d|%s", sn.VolumeID, strings.ToLower(sn.Root))
 	}
+	// Only complete rows count as latest: a newer failed or partial run must
+	// not leave the newest complete baseline unprotected.
 	for i := len(all) - 1; i >= 0; i-- {
+		if all[i].Status != "complete" {
+			continue
+		}
 		key := groupKey(all[i])
 		if _, ok := latest[key]; !ok {
 			latest[key] = all[i].ID
@@ -486,15 +491,17 @@ func (s *Store) DeleteDailyHistoryBefore(ctx context.Context, day string) (summa
 }
 
 // CountDailyHistoryBefore counts summaries, top directories and retained events
-// that a prune would delete.
+// that a prune would delete. An empty day skips the summary counts.
 func (s *Store) CountDailyHistoryBefore(ctx context.Context, day string, eventsBeforeMS int64) (summaries, dirs, events int64, err error) {
-	if err = s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM daily_summary WHERE day < ?`, day).Scan(&summaries); err != nil {
-		return 0, 0, 0, err
-	}
-	if err = s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM daily_top_dirs WHERE day < ?`, day).Scan(&dirs); err != nil {
-		return 0, 0, 0, err
+	if day != "" {
+		if err = s.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM daily_summary WHERE day < ?`, day).Scan(&summaries); err != nil {
+			return 0, 0, 0, err
+		}
+		if err = s.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM daily_top_dirs WHERE day < ?`, day).Scan(&dirs); err != nil {
+			return 0, 0, 0, err
+		}
 	}
 	if eventsBeforeMS > 0 {
 		if err = s.db.QueryRowContext(ctx,

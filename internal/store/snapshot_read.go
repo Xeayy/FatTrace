@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"fattrace/internal/model"
@@ -117,18 +118,42 @@ func (s *Store) NextComplete(ctx context.Context, volumeID, afterID int64, root 
 }
 
 // LoadCrossVolumeCandidates returns name/size/mtime keys from the latest
-// complete snapshot of every volume except excludeVolumeID. Only metadata is
-// kept; callers build their own index.
+// complete volume-root snapshot of every volume except excludeVolumeID. Only
+// metadata is kept; callers build their own index.
 func (s *Store) LoadCrossVolumeCandidates(ctx context.Context, excludeVolumeID int64) ([]model.FileCandidate, error) {
+	snaps, err := s.CompleteVolumeRootSnapshots(ctx)
+	if err != nil {
+		return nil, err
+	}
+	latest := make(map[int64]SnapshotInfo)
+	for _, sn := range snaps {
+		if sn.VolumeID == excludeVolumeID {
+			continue
+		}
+		cur, ok := latest[sn.VolumeID]
+		if !ok || sn.StartedAt > cur.StartedAt ||
+			(sn.StartedAt == cur.StartedAt && sn.ID > cur.ID) {
+			latest[sn.VolumeID] = sn
+		}
+	}
+	if len(latest) == 0 {
+		return nil, nil
+	}
+	ids := make([]int64, 0, len(latest))
+	for _, sn := range latest {
+		ids = append(ids, sn.ID)
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT sf.name, sf.size, sf.mtime_ms, v.serial
 		FROM snap_files sf
 		JOIN snapshots s ON s.id = sf.snapshot_id
 		JOIN volumes v ON v.id = s.volume_id
-		WHERE s.volume_id <> ? AND sf.mtime_ms > 0 AND s.id = (
-			SELECT MAX(x.id) FROM snapshots x
-			WHERE x.volume_id = s.volume_id AND x.status = 'complete'
-		)`, excludeVolumeID)
+		WHERE s.id IN (`+placeholders+`) AND sf.mtime_ms > 0`, args...)
 	if err != nil {
 		return nil, err
 	}
