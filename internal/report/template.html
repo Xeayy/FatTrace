@@ -3,26 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0f14">
 <title>FatTrace 周报</title>
 <style>
   :root {
     color-scheme: dark;
-    --bg: #0e1116;
-    --panel: #161b22;
-    --panel-2: #1c232c;
-    --line: #2a3340;
-    --text: #e6edf3;
+    --bg: #0b0f14;
+    --panel: #131a23;
+    --panel-2: #10161e;
+    --line: #223041;
+    --text: #e8edf3;
     --muted: #8b98a9;
     --pos: #f0a33c;
-    --neg: #5fb3f7;
-    --ok: #3fb950;
-    --warn: #d29922;
-    --danger: #f85149;
+    --neg: #4aa3a2;
+    --ok: #3fa98e;
+    --warn: #c9a227;
+    --danger: #d96a56;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--text); }
   body {
-    font: 14px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+    font: 14px/1.55 "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
     padding: 24px clamp(16px, 4vw, 48px) 40px;
     max-width: 1440px;
     margin: 0 auto;
@@ -73,8 +74,9 @@
     padding: 16px; margin-bottom: 16px; min-width: 0;
   }
   .panel h2 {
-    margin: 0 0 12px; font-size: 14px; font-weight: 600; letter-spacing: .2px;
+    margin: 0 0 12px; font-size: 15px; font-weight: 600; letter-spacing: .2px;
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    border-left: 3px solid var(--pos); padding-left: 10px;
   }
   .panel h2 .note { color: var(--muted); font-weight: 400; font-size: 12px; }
   .treemap-wrap { position: relative; width: 100%; }
@@ -89,7 +91,7 @@
   }
   .tooltip {
     position: absolute; pointer-events: none; opacity: 0; transition: opacity .08s;
-    background: #0b0e12; border: 1px solid var(--line); border-radius: 8px;
+    background: #05080c; border: 1px solid var(--line); border-radius: 8px;
     padding: 8px 10px; font-size: 12px; max-width: 420px; z-index: 5;
     box-shadow: 0 8px 24px rgba(0,0,0,.45); font-variant-numeric: tabular-nums;
   }
@@ -101,7 +103,7 @@
   .rows { list-style: none; margin: 0; padding: 0; }
   .row {
     display: flex; gap: 14px; align-items: flex-start; justify-content: space-between;
-    padding: 8px 0; border-top: 1px solid rgba(42,51,64,.55);
+    padding: 8px 0; border-top: 1px solid rgba(34,48,65,.6);
   }
   .row:first-child { border-top: 0; }
   .row-main { min-width: 0; }
@@ -112,17 +114,17 @@
     display: inline-block; border: 1px solid var(--line); border-radius: 999px;
     padding: 0 7px; font-size: 11px; color: var(--muted); margin-right: 6px;
   }
-  .tag.rule { border-color: #3b536b; color: #a9c6e0; }
+  .tag.rule { border-color: #2a4a63; color: #9fc6e4; }
   .tag.rule.low { border-color: #5d4d16; color: #d8c179; }
   .explain-grid { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   @media (max-width: 900px) { .explain-grid { grid-template-columns: 1fr; } }
-  .cat-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 7px 0; border-top: 1px solid rgba(42,51,64,.55); }
+  .cat-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 7px 0; border-top: 1px solid rgba(34,48,65,.6); }
   .cat-row:first-child { border-top: 0; }
   .cat-head { display: flex; gap: 8px; align-items: baseline; }
   .cat-name { font-weight: 550; }
   .cat-meta { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
   .cat-bytes { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-  .cat-bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: #202833; overflow: hidden; }
+  .cat-bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: #1a242f; overflow: hidden; }
   .cat-bar i { display: block; height: 100%; background: var(--pos); border-radius: 2px; }
   .subhead { color: var(--muted); font-size: 12px; margin: 0 0 6px; }
   .empty { color: var(--muted); padding: 8px 0; }
@@ -133,10 +135,24 @@
   .check-table .k { color: var(--muted); }
   footer { color: var(--muted); font-size: 12px; margin-top: 24px; border-top: 1px solid var(--line); padding-top: 12px; }
   .export-warning { margin-top: 24px; padding: 10px 12px; border-left: 3px solid var(--warn); color: var(--warn);
-    background: rgba(210, 153, 34, 0.08); font-size: 13px; }
+    background: rgba(201, 162, 39, 0.08); font-size: 13px; }
+  .totop { color: var(--muted); margin-left: 10px; }
+  @media print {
+    :root {
+      color-scheme: light;
+      --bg: #ffffff; --panel: #ffffff; --panel-2: #f4f6f8;
+      --line: #d5dbe2; --text: #141a21; --muted: #54606d;
+    }
+    body { max-width: none; padding: 0; }
+    header.top, .panel, .kpi { break-inside: avoid; }
+    .tooltip, .totop { display: none !important; }
+    .export-warning { background: #fff8e6; }
+    a { color: inherit; text-decoration: none; }
+    #treemap { max-width: 100%; }
+  }
 </style>
 </head>
-<body>
+<body id="top">
 <header class="top">
   <div class="brand">FatTrace<span>weekly report</span></div>
   <div class="period" id="period"></div>
@@ -194,6 +210,7 @@
 
 <footer>
   单文件离线报告，无外部请求 · FatTrace · <span id="generated"></span>
+  <a class="totop" href="#top">回到顶部</a>
 </footer>
 
 <script id="report-data" type="application/json">"__FATTRACE_DATA__"</script>
@@ -253,14 +270,19 @@
     banners.appendChild(b);
   }
   const to = D.to_snapshot, check = D.volume_check, totals = D.totals;
+  function volumeNote(c) {
+    if (c.skipped) return "当前快照不适合做卷级校验（非卷根或缺少卷用量记录）。";
+    if (c.ok) return "根目录增量与卷已用增量在容差内一致。";
+    return "根目录增量与卷已用增量不一致：受保护或排除目录的增量可能未被计入。";
+  }
   if (to.coverage_pct > 0 && to.coverage_pct < 95) {
     banner("warn", "覆盖率 " + fmtPct(to.coverage_pct), "低于 95%：受保护或不可读目录未计入，实际增量可能更高。");
   }
   if (check.skipped) {
-    banner("info", "卷级校验已跳过", check.message || "");
+    banner("info", "卷级校验已跳过", volumeNote(check));
   } else if (!check.ok) {
     banner("danger", "卷级校验未通过 · 偏差 " + fmtPct(check.diff_pct),
-      (check.message || "") + "（根 Δ " + signedBytes(check.root_delta_alloc) + "，卷 Δ " + signedBytes(check.disk_delta_alloc) + "）");
+      volumeNote(check) + "（根 Δ " + signedBytes(check.root_delta_alloc) + "，卷 Δ " + signedBytes(check.disk_delta_alloc) + "）");
   }
   if (D.warnings && D.warnings.length) {
     banner("warn", "数据质量警告 " + D.warnings.length + " 条", "详见“校验与警告”。");
@@ -291,7 +313,7 @@
     fmtCount(totals.files_added) + " 新增 · " + fmtCount(totals.files_deleted) + " 删除 · " +
     fmtCount(totals.files_grown) + " 变大 · " + fmtCount(totals.files_shrunk) + " 变小");
   if (check.skipped) {
-    kpi("卷级校验", "SKIPPED", check.message || "无法对比卷用量", "zero");
+    kpi("卷级校验", "SKIPPED", volumeNote(check), "zero");
   } else {
     kpi("卷级校验", check.ok ? "OK" : "WARN",
       "偏差 " + fmtPct(check.diff_pct) + " · 根 Δ " + signedBytes(check.root_delta_alloc),
@@ -312,6 +334,7 @@
   const canvas = $("treemap");
   const tooltip = $("tooltip");
   const palette = ["#f0a33c", "#e2842f", "#d96a3a", "#cd5a56", "#b9557e", "#9760ab", "#7469c9", "#4f83c9", "#3f9fb8", "#3fa98e"];
+  const UI_FONT = '"Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif';
   let rects = [];
   let hover = -1;
 
@@ -417,7 +440,7 @@
     rects = squarify(D.tiles || [], 0, 0, W, H);
     if (!rects.length) {
       ctx.fillStyle = "#8b98a9";
-      ctx.font = "14px system-ui, sans-serif";
+      ctx.font = "14px " + UI_FONT;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("这个区间没有目录增长", W / 2, H / 2);
@@ -454,9 +477,9 @@
         ctx.fillStyle = "rgba(10,12,15,0.9)";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.font = "700 19px system-ui, sans-serif";
+        ctx.font = "700 19px " + UI_FONT;
         ctx.fillText(truncate(ctx, label, w - 60), x + w / 2, y + h / 2 - 13);
-        ctx.font = "600 14px system-ui, sans-serif";
+        ctx.font = "600 14px " + UI_FONT;
         ctx.fillText(signedBytes(r.item.delta_alloc), x + w / 2, y + h / 2 + 15);
         ctx.restore();
       } else if (w > 76 && h > 30) {
@@ -465,12 +488,12 @@
         ctx.rect(x + 6, y + 4, w - 12, h - 8);
         ctx.clip();
         ctx.fillStyle = "rgba(10,12,15,0.88)";
-        ctx.font = "600 12px system-ui, sans-serif";
+        ctx.font = "600 12px " + UI_FONT;
         ctx.textAlign = "left";
         ctx.textBaseline = "top";
         ctx.fillText(truncate(ctx, label, w - 14), x + 7, y + 6);
         if (h > 48) {
-          ctx.font = "11px system-ui, sans-serif";
+          ctx.font = "11px " + UI_FONT;
           ctx.fillText(signedBytes(r.item.delta_alloc), x + 7, y + 22);
         }
         ctx.restore();
@@ -691,7 +714,7 @@
   }
   checkRow("根目录 Δ（实占）", signedBytes(check.root_delta_alloc));
   if (check.skipped) {
-    checkRow("卷级校验", "跳过 · " + (check.message || ""));
+    checkRow("卷级校验", "跳过 · " + volumeNote(check));
   } else {
     checkRow("卷用量 Δ（实占）", signedBytes(check.disk_delta_alloc));
     checkRow("偏差", fmtPct(check.diff_pct), check.ok ? "ok" : "danger");
