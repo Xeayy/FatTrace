@@ -138,6 +138,27 @@ func TestBuildTilesAddsOtherOnlyWhenPositive(t *testing.T) {
 	}
 }
 
+func TestBuildTilesOtherNotInflatedByShrinkingDir(t *testing.T) {
+	dirs := []model.DirChange{
+		{Name: "A", Path: `D:\A`, DeltaAlloc: 80},
+		{Name: "B", Path: `D:\B`, DeltaAlloc: -95},
+	}
+	tiles := buildTiles(dirs, 100)
+	var sum, other int64
+	for _, tile := range tiles {
+		sum += tile.Delta
+		if tile.Label == "其他目录" {
+			other = tile.Delta
+		}
+	}
+	if other != 20 {
+		t.Fatalf("other = %d, want 20 (net 100 minus positive tiles 80): %+v", other, tiles)
+	}
+	if sum != 100 {
+		t.Fatalf("tile sum = %d, want net 100: %+v", sum, tiles)
+	}
+}
+
 func TestRunEndToEndWithSnapshotErrors(t *testing.T) {
 	st := newStore(t)
 	ctx := context.Background()

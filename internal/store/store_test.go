@@ -200,6 +200,39 @@ func TestWriterLockExclusive(t *testing.T) {
 	again.Close()
 }
 
+func TestOpenWaitTimesOutWhileWriterHeld(t *testing.T) {
+	_, path := testStore(t)
+	start := time.Now()
+	if _, err := OpenWait(path, 300*time.Millisecond); !errors.Is(err, ErrLocked) {
+		t.Fatalf("OpenWait error = %v, want ErrLocked", err)
+	}
+	if elapsed := time.Since(start); elapsed < 200*time.Millisecond {
+		t.Fatalf("OpenWait returned after %v, want it to wait for the lock", elapsed)
+	}
+}
+
+func TestOpenWaitAcquiresAfterWriterCloses(t *testing.T) {
+	s, path := testStore(t)
+	result := make(chan error, 1)
+	go func() {
+		st, err := OpenWait(path, 5*time.Second)
+		if err == nil {
+			st.Close()
+		}
+		result <- err
+	}()
+	time.Sleep(400 * time.Millisecond)
+	s.Close()
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("OpenWait after writer close: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("OpenWait did not acquire the released lock")
+	}
+}
+
 func TestOpenReaderUninitialized(t *testing.T) {
 	dir := t.TempDir()
 	missing := filepath.Join(dir, "missing.db")

@@ -230,6 +230,21 @@ func TestComputeDayBaselines(t *testing.T) {
 	if n := f.count(t, `SELECT COUNT(*) FROM file_events WHERE snapshot_id = ?`, single); n != 0 {
 		t.Fatalf("single-shot events = %d", n)
 	}
+
+	// A stale event can survive from an earlier run whose older pair was then
+	// pruned; recomputing the now-single day must remove it.
+	if _, err := f.raw.Exec(`INSERT INTO file_events
+		(volume_id, snapshot_id, kind, frn, path, size_before, size_after, delta_bytes, detected_at)
+		VALUES (?, ?, 'new', 10, 'E:\only.bin', 0, 500, 500, ?)`,
+		vol2, single, now.UnixMilli()); err != nil {
+		t.Fatalf("insert stale event: %v", err)
+	}
+	if _, err := Compute(ctx, f.st, rules.MustBuiltin(), Options{Days: 7, TopN: 10, Now: now}); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.count(t, `SELECT COUNT(*) FROM file_events WHERE snapshot_id = ?`, single); n != 0 {
+		t.Fatalf("stale single-shot events after recompute = %d", n)
+	}
 }
 
 func TestComputeWindow(t *testing.T) {
