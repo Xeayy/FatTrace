@@ -313,6 +313,93 @@ func TestAPIDiffMatchesService(t *testing.T) {
 	}
 }
 
+func TestDiffCacheInvalidatesWhenRunningScanCompletes(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+
+	var before model.DiffResult
+	if code := doGet(t, f, "/api/diff", testToken, &before); code != http.StatusOK {
+		t.Fatalf("diff before scan = %d", code)
+	}
+	if before.FromSnapshot.ID != f.from || before.ToSnapshot.ID != f.to {
+		t.Fatalf("auto pair before scan = %d->%d, want %d->%d",
+			before.FromSnapshot.ID, before.ToSnapshot.ID, f.from, f.to)
+	}
+
+	// The running row exists before any data is published, and the UI keeps
+	// polling /api/diff while the scan runs.
+	w, err := f.store.BeginScan(ctx, f.vol)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records := []model.FileRecord{
+		{FRN: 1, ParentFRN: 0, Name: `D:\`, IsDir: true},
+		{FRN: 2, ParentFRN: 1, Name: "sub", IsDir: true},
+		{FRN: 10, ParentFRN: 1, Name: "keep.bin", Size: 100, AllocSize: 1000},
+		{FRN: 11, ParentFRN: 2, Name: "inner.bin", Size: 50, AllocSize: 4096},
+		{FRN: 12, ParentFRN: 1, Name: "new.bin", Size: 100, AllocSize: 2000},
+		{FRN: 13, ParentFRN: 1, Name: "fresh.bin", Size: 100, AllocSize: 3000},
+	}
+	for _, r := range records {
+		if err := w.Add(ctx, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := w.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	id, err := f.store.BeginSnapshot(ctx, f.vol, "weekly", `D:\`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var during model.DiffResult
+	if code := doGet(t, f, "/api/diff", testToken, &during); code != http.StatusOK {
+		t.Fatalf("diff during scan = %d", code)
+	}
+	if during.ToSnapshot.ID != f.to {
+		t.Fatalf("running snapshot must not become the auto-pair target: %+v", during.ToSnapshot)
+	}
+
+	agg, err := f.store.AggregateDirs(ctx, f.vol, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var files, dirs, alloc int64
+	for _, r := range records {
+		if r.IsDir {
+			dirs++
+		} else {
+			files++
+			alloc += r.AllocSize
+		}
+	}
+	err = f.store.CommitSnapshot(ctx, store.SnapshotCommit{
+		SnapshotID: id, VolumeID: f.vol, Status: "complete",
+		Stats: model.ScanStats{
+			Files: files, Dirs: dirs, Bytes: alloc, AllocBytes: alloc,
+			UniqueBytes: alloc, UniqueAllocBytes: alloc,
+			VolumeUsed: 107_000, CoveragePct: 99.9,
+		},
+		Dirs: agg,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var after model.DiffResult
+	if code := doGet(t, f, "/api/diff", testToken, &after); code != http.StatusOK {
+		t.Fatalf("diff after scan = %d", code)
+	}
+	if after.FromSnapshot.ID != f.to || after.ToSnapshot.ID != id {
+		t.Fatalf("auto pair after scan = %d->%d, want %d->%d (stale cache)",
+			after.FromSnapshot.ID, after.ToSnapshot.ID, f.to, id)
+	}
+	if len(after.TopGrowth) == 0 || after.TopGrowth[0].Name != "fresh.bin" {
+		t.Fatalf("after-scan growth = %+v, want fresh.bin", after.TopGrowth)
+	}
+}
+
 func TestAPIRulesAndExplanation(t *testing.T) {
 	f := newFixture(t)
 

@@ -289,6 +289,90 @@ func TestFileRowRetentionKeepsSnapshotsAndDirs(t *testing.T) {
 	}
 }
 
+func TestPruneKeepsNewestCompleteAfterNewerPartialRun(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	vol, err := f.st.EnsureVolume(ctx, 0xC4, "NTFS", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.Local)
+	older := f.snapshot(t, vol, "daily", "complete", now.AddDate(0, 0, -50))
+	complete := f.snapshot(t, vol, "daily", "complete", now.AddDate(0, 0, -40))
+	partial := f.snapshot(t, vol, "daily", "partial", now.AddDate(0, 0, -2))
+	cfg := config.Retention{DailySnapshotsDays: 30}
+
+	rep, err := Run(ctx, f.st, cfg, false, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Snapshots) != 1 || rep.Snapshots[0].ID != older {
+		t.Fatalf("candidates = %+v, want only #%d", rep.Snapshots, older)
+	}
+
+	rep, err = Run(ctx, f.st, cfg, true, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Deleted.Snapshots != 1 {
+		t.Fatalf("deleted snapshots = %d, want 1", rep.Deleted.Snapshots)
+	}
+	for _, id := range []int64{complete, partial} {
+		if f.count(t, `SELECT COUNT(*) FROM snapshots WHERE id = ?`, id) != 1 {
+			t.Fatalf("snapshot #%d was pruned", id)
+		}
+	}
+}
+
+func TestPruneCountsSummariesOnlyWhenEnabled(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	vol, err := f.st.EnsureVolume(ctx, 0xC5, "NTFS", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.Local)
+	sn := f.snapshot(t, vol, "daily", "complete", now.AddDate(0, 0, -40))
+	if err := f.st.SaveDailySummary(ctx, model.DailySummary{
+		VolumeID: vol, Root: `D:\`, Day: "2026-06-01", SnapshotID: sn,
+		UsedBytes: 1, DeltaBytes: 1,
+	}, []model.DailyTopDir{{VolumeID: vol, Day: "2026-06-01", Rank: 1, Path: `D:\old`, DeltaBytes: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.st.ReplaceFileEvents(ctx, sn, []model.FileEvent{
+		{VolumeID: vol, SnapshotID: sn, Kind: "new", FRN: 10, Path: `D:\old.bin`,
+			SizeAfter: 100, DetectedAt: now.AddDate(0, 0, -100).UnixMilli()},
+		{VolumeID: vol, SnapshotID: sn, Kind: "new", FRN: 11, Path: `D:\new.bin`,
+			SizeAfter: 100, DetectedAt: now.AddDate(0, 0, -10).UnixMilli()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Retention{FileEventsDays: 56}
+
+	rep, err := Run(ctx, f.st, cfg, false, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.SummaryCutoff != "" || rep.Summaries != 0 || rep.TopDirs != 0 || rep.FileEvents != 1 {
+		t.Fatalf("dry-run counts = cutoff %q summaries %d dirs %d events %d",
+			rep.SummaryCutoff, rep.Summaries, rep.TopDirs, rep.FileEvents)
+	}
+
+	rep, err = Run(ctx, f.st, cfg, true, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Deleted.Summaries != 0 || rep.Deleted.TopDirs != 0 || rep.Deleted.FileEvents != 1 {
+		t.Fatalf("applied deletions = %+v", rep.Deleted)
+	}
+	if n := f.count(t, `SELECT COUNT(*) FROM daily_summary`); n != 1 {
+		t.Fatalf("daily summaries = %d, want 1", n)
+	}
+	if n := f.count(t, `SELECT COUNT(*) FROM daily_top_dirs`); n != 1 {
+		t.Fatalf("daily top dirs = %d, want 1", n)
+	}
+}
+
 func TestZeroRetentionDisablesDimensions(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()

@@ -60,7 +60,7 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 	}
 	cross := q.Get("cross") == "1" || q.Get("cross") == "true"
 
-	latest := s.latestSnapshotID(r.Context())
+	latest := s.latestCompleteSnapshotID(r.Context())
 	key := diffKey{from: fromID, to: toID, topN: topN, cross: cross, latest: latest}
 
 	s.diffMu.Lock()
@@ -140,10 +140,12 @@ func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rep)
 }
 
-// latestSnapshotID participates in auto-pair cache keys so a fresh scan does
-// not keep serving the previous default pair.
-func (s *Server) latestSnapshotID(ctx context.Context) int64 {
-	list, err := s.st.ListSnapshots(ctx, 1)
+// latestCompleteSnapshotID participates in auto-pair cache keys so a fresh scan
+// does not keep serving the previous default pair. Only complete rows count: the
+// running row is inserted when a scan starts, so keying on it would leave the
+// cache pinned to the pre-scan pair once that run finishes.
+func (s *Server) latestCompleteSnapshotID(ctx context.Context) int64 {
+	list, err := s.st.RecentComplete(ctx, "", 1)
 	if err != nil || len(list) == 0 {
 		return 0
 	}

@@ -113,12 +113,8 @@ func Run(ctx context.Context, st *store.Store, cfg config.Retention, apply bool,
 	eventsBefore := cutoff(now, cfg.FileEventsDays)
 	rep.EventsCutoffMS = eventsBefore
 	if summaryCutoff != "" || eventsBefore > 0 {
-		dayForCount := summaryCutoff
-		if dayForCount == "" {
-			dayForCount = "0000-00-00"
-		}
 		rep.Summaries, rep.TopDirs, rep.FileEvents, err =
-			st.CountDailyHistoryBefore(ctx, dayForCount, eventsBefore)
+			st.CountDailyHistoryBefore(ctx, summaryCutoff, eventsBefore)
 		if err != nil {
 			return rep, err
 		}
