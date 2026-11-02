@@ -95,8 +95,9 @@ func Build(res model.DiffResult, errs []ErrorRow, generatedAt time.Time) ([]byte
 // buildTiles turns the ranked growth directories into non-overlapping treemap
 // rectangles. A ranked directory's delta already contains its descendants, so
 // each entry subtracts itself from its nearest ranked ancestor; only the
-// resulting own-growth is drawn. "Other" picks up net growth not owned by the
-// ranked directories and is only added when positive.
+// resulting own-growth is drawn. "Other" covers net growth not represented by
+// the positive tiles and is only added when positive; using the positive total
+// (not the signed ranked total) keeps a shrinking directory from inflating it.
 func buildTiles(dirs []model.DirChange, totalDelta int64) []Tile {
 	index := make(map[string]int, len(dirs))
 	for i, d := range dirs {
@@ -127,12 +128,12 @@ func buildTiles(dirs []model.DirChange, totalDelta int64) []Tile {
 	}
 
 	var tiles []Tile
-	var ranked int64
+	var shown int64
 	for i, d := range dirs {
-		ranked += own[i]
 		if own[i] <= 0 {
 			continue
 		}
+		shown += own[i]
 		label := d.Name
 		if label == "" {
 			label = d.Path
@@ -142,7 +143,7 @@ func buildTiles(dirs []model.DirChange, totalDelta int64) []Tile {
 			Files: d.FilesAfter, Unknown: d.UnknownAfter,
 		})
 	}
-	if other := totalDelta - ranked; other > 0 {
+	if other := totalDelta - shown; other > 0 {
 		tiles = append(tiles, Tile{Label: "其他目录", Delta: other})
 	}
 	return tiles

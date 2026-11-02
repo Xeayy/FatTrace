@@ -70,13 +70,20 @@ func DefaultPath() (string, error) {
 
 // Open opens the database for writing, takes the process-wide writer lock and
 // applies pending migrations.
-func Open(path string) (*Store, error) { return open(path, false) }
+func Open(path string) (*Store, error) { return open(path, false, 0) }
+
+// OpenWait is Open with a bounded wait for the writer lock. Scheduled daily and
+// weekly runs can catch up at the same logon; waiting lets the second run queue
+// instead of failing with ErrLocked.
+func OpenWait(path string, timeout time.Duration) (*Store, error) {
+	return open(path, false, timeout)
+}
 
 // OpenReader opens the database read-only (no writer lock, no migration). It is
 // used by status/UI paths so they keep working while a scan owns the writer lock.
-func OpenReader(path string) (*Store, error) { return open(path, true) }
+func OpenReader(path string) (*Store, error) { return open(path, true, 0) }
 
-func open(path string, reader bool) (*Store, error) {
+func open(path string, reader bool, lockWait time.Duration) (*Store, error) {
 	if path == "" {
 		p, err := DefaultPath()
 		if err != nil {
@@ -99,7 +106,7 @@ func open(path string, reader bool) (*Store, error) {
 
 	var lk *fileLock
 	if !reader {
-		lk, err = acquireLock(abs + ".lock")
+		lk, err = acquireLockWait(abs+".lock", lockWait)
 		if err != nil {
 			return nil, err
 		}

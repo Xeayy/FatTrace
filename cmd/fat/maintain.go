@@ -88,7 +88,10 @@ func maintainCmd(args []string) {
 		logf("config error: %v", err)
 		fail(err)
 	}
-	st, err := store.Open(path)
+	// Daily and weekly catch-up runs can start at the same logon. Waiting for
+	// the writer lock turns the second run into a queued run instead of a
+	// failed task.
+	st, err := store.OpenWait(path, 10*time.Minute)
 	if err != nil {
 		logf("open store error: %v", err)
 		fail(err)

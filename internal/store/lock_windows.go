@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"syscall"
+	"time"
 )
 
 // fileLock is a process-wide exclusive lock implemented as a lock file opened
@@ -42,6 +43,38 @@ func acquireLock(path string) (*fileLock, error) {
 	}
 	_, _ = syscall.Write(h, []byte("pid="+strconv.Itoa(os.Getpid())+"\n"))
 	return &fileLock{h: h}, nil
+}
+
+// acquireLockWait retries a busy writer lock with backoff. It is separate from
+// acquireLock so interactive commands still fail fast while scheduled runs can
+// queue behind a catch-up scan.
+func acquireLockWait(path string, timeout time.Duration) (*fileLock, error) {
+	const (
+		initial = 250 * time.Millisecond
+		maxWait = 2 * time.Second
+	)
+	deadline := time.Now().Add(timeout)
+	wait := initial
+	for {
+		lk, err := acquireLock(path)
+		if err == nil {
+			return lk, nil
+		}
+		if !errors.Is(err, ErrLocked) || timeout <= 0 || !time.Now().Before(deadline) {
+			return nil, err
+		}
+		remaining := time.Until(deadline)
+		if wait > remaining {
+			wait = remaining
+		}
+		time.Sleep(wait)
+		if wait < maxWait {
+			wait *= 2
+			if wait > maxWait {
+				wait = maxWait
+			}
+		}
+	}
 }
 
 func (l *fileLock) Close() {

@@ -106,10 +106,11 @@ func Compute(ctx context.Context, st *store.Store, set *rules.Set, opts Options)
 			if err := st.SaveDailySummary(ctx, res.Summary, res.TopDirs); err != nil {
 				return rep, fmt.Errorf("save %s %s: %w", group.root, day, err)
 			}
-			if !res.SingleShot {
-				if err := st.ReplaceFileEvents(ctx, res.ToID, res.Events); err != nil {
-					return rep, fmt.Errorf("save events %s %s: %w", group.root, day, err)
-				}
+			// Always replace, including single-snapshot days: a previous run may
+			// have stored events for this snapshot before its older pair was
+			// pruned, and those events no longer describe a daily delta.
+			if err := st.ReplaceFileEvents(ctx, res.ToID, res.Events); err != nil {
+				return rep, fmt.Errorf("save events %s %s: %w", group.root, day, err)
 			}
 			rep.Days = append(rep.Days, res)
 		}
