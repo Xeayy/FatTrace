@@ -188,6 +188,8 @@ const palette = [
   "#9760ab", "#7469c9", "#4f83c9", "#3f9fb8", "#3fa98e",
 ];
 
+const UI_FONT = '"Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif';
+
 const tooltip = document.getElementById("tooltip");
 
 function hideTooltip() { tooltip.style.opacity = "0"; }
@@ -309,6 +311,7 @@ function createTreemap(canvas, items, opts = {}) {
   let hatch = null;
 
   function draw() {
+    if (wrap.clientWidth <= 0) return; // still detached in a DocumentFragment
     const dpr = window.devicePixelRatio || 1;
     const W = Math.max(320, wrap.clientWidth);
     const H = opts.height || Math.max(300, Math.min(520, Math.round(W * 0.42)));
@@ -321,7 +324,7 @@ function createTreemap(canvas, items, opts = {}) {
     rects = squarify(items, 0, 0, W, H);
     if (!rects.length) {
       ctx.fillStyle = "#8b98a9";
-      ctx.font = "14px system-ui, sans-serif";
+      ctx.font = "14px " + UI_FONT;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(opts.emptyText || "没有可绘制的内容", W / 2, H / 2);
@@ -357,9 +360,9 @@ function createTreemap(canvas, items, opts = {}) {
         ctx.fillStyle = "rgba(10,12,15,0.9)";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.font = "700 19px system-ui, sans-serif";
+        ctx.font = "700 19px " + UI_FONT;
         ctx.fillText(truncateText(ctx, label, w - 60), x + w / 2, y + h / 2 - 13);
-        ctx.font = "600 14px system-ui, sans-serif";
+        ctx.font = "600 14px " + UI_FONT;
         ctx.fillText(fmtBytes(r.item.value, !!r.item.signed), x + w / 2, y + h / 2 + 15);
         ctx.restore();
       } else if (w > 76 && h > 30) {
@@ -368,12 +371,12 @@ function createTreemap(canvas, items, opts = {}) {
         ctx.rect(x + 6, y + 4, w - 12, h - 8);
         ctx.clip();
         ctx.fillStyle = "rgba(10,12,15,0.88)";
-        ctx.font = "600 12px system-ui, sans-serif";
+        ctx.font = "600 12px " + UI_FONT;
         ctx.textAlign = "left";
         ctx.textBaseline = "top";
         ctx.fillText(truncateText(ctx, label, w - 14), x + 7, y + 6);
         if (h > 48) {
-          ctx.font = "11px system-ui, sans-serif";
+          ctx.font = "11px " + UI_FONT;
           ctx.fillText(fmtBytes(r.item.value, !!r.item.signed), x + 7, y + 22);
         }
         ctx.restore();
@@ -419,6 +422,11 @@ function createTreemap(canvas, items, opts = {}) {
 
   if (opts.onPick) canvas.style.cursor = "pointer";
   registerRedraw(draw);
+  if (typeof ResizeObserver === "function") {
+    new ResizeObserver(() => {
+      if (wrap.clientWidth > 0) draw();
+    }).observe(wrap);
+  }
   draw();
 }
 
@@ -428,6 +436,7 @@ function drawSparkline(canvas, points) {
   const wrap = canvas.parentElement;
 
   function draw() {
+    if (wrap.clientWidth <= 0) return; // still detached in a DocumentFragment
     const dpr = window.devicePixelRatio || 1;
     const W = Math.max(240, wrap.clientWidth);
     const H = 120;
@@ -484,6 +493,11 @@ function drawSparkline(canvas, points) {
   }
 
   registerRedraw(draw);
+  if (typeof ResizeObserver === "function") {
+    new ResizeObserver(() => {
+      if (wrap.clientWidth > 0) draw();
+    }).observe(wrap);
+  }
   draw();
 }
 
@@ -566,7 +580,7 @@ function kpiRow(totals, from, to, check, ex) {
     fmtCount(totals.files_added) + " 新增 · " + fmtCount(totals.files_deleted) + " 删除 · " +
     fmtCount(totals.files_grown) + " 变大 · " + fmtCount(totals.files_shrunk) + " 变小");
   if (check.skipped) {
-    add("卷级校验", "SKIPPED", check.message || "无法对比卷用量", "zero");
+    add("卷级校验", "SKIPPED", volumeNote(check), "zero");
   } else {
     add("卷级校验", check.ok ? "OK" : "WARN",
       "偏差 " + fmtPct(check.diff_pct) + " · 根 Δ " + signedBytes(check.root_delta_alloc),
@@ -584,6 +598,12 @@ function kpiRow(totals, from, to, check, ex) {
   return zone;
 }
 
+function volumeNote(check) {
+  if (check.skipped) return "当前快照不适合做卷级校验（非卷根或缺少卷用量记录）。";
+  if (check.ok) return "根目录增量与卷已用增量在容差内一致。";
+  return "根目录增量与卷已用增量不一致：受保护或排除目录的增量可能未被计入。";
+}
+
 function diffBanners(D) {
   const check = D.volume_check;
   const to = D.to_snapshot;
@@ -592,10 +612,10 @@ function diffBanners(D) {
       "低于 95%：受保护或不可读目录未计入，实际增量可能更高。");
   }
   if (check.skipped) {
-    addBanner("info", "卷级校验已跳过", check.message || "");
+    addBanner("info", "卷级校验已跳过", volumeNote(check));
   } else if (!check.ok) {
     addBanner("danger", "卷级校验未通过 · 偏差 " + fmtPct(check.diff_pct),
-      (check.message || "") + "（根 Δ " + signedBytes(check.root_delta_alloc) +
+      volumeNote(check) + "（根 Δ " + signedBytes(check.root_delta_alloc) +
       "，卷 Δ " + signedBytes(check.disk_delta_alloc) + "）");
   }
   if (D.warnings && D.warnings.length) {
@@ -683,7 +703,11 @@ function checkPanel(D) {
     ["结论", check.skipped ? "已跳过" : (check.ok ? "通过" : "未通过")],
   ].map(([k, v]) => [td(k, "dim"), td(v)]);
   p.appendChild(dataTable([{ label: "项目" }, { label: "值" }], rows));
-  if (check.message) p.appendChild(el("div", "notice", check.message));
+  if (check.message) {
+    const note = el("div", "notice", volumeNote(check));
+    note.title = check.message;
+    p.appendChild(note);
+  }
   if (D.warnings && D.warnings.length) {
     const ul = el("ul");
     for (const w of D.warnings) ul.appendChild(el("li", null, w));
@@ -1453,7 +1477,10 @@ function errorBox(err) {
   return box;
 }
 
+let renderSeq = 0;
+
 async function render() {
+  const seq = ++renderSeq;
   redraws.length = 0;
   clearBanners();
   hideTooltip();
@@ -1467,10 +1494,12 @@ async function render() {
   try {
     const frag = document.createDocumentFragment();
     await handler(frag, params);
+    if (seq !== renderSeq) return; // a newer navigation won
     view.textContent = "";
     view.appendChild(frag);
     window.scrollTo(0, 0);
   } catch (err) {
+    if (seq !== renderSeq) return;
     view.textContent = "";
     view.appendChild(errorBox(err));
   }
