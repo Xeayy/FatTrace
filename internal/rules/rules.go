@@ -49,6 +49,8 @@ var categoryLabels = map[string]string{
 	"database":     "应用数据库",
 	"images":       "磁盘镜像",
 	"games":        "游戏安装",
+	"app-update":   "应用更新",
+	"vcs":          "版本控制",
 }
 
 // CategoryLabel returns the human label for a rule category.

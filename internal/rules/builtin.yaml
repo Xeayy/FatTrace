@@ -683,3 +683,64 @@ rules:
     match:
       path_globs:
         - '**\Downloads\**'
+
+  - id: app-update.versioned-dir
+    name: 应用版本目录
+    category: app-update
+    confidence: medium
+    description: 以版本号命名的应用安装目录（如 Application\1.2.3.4 或 *-versions\0.5.1），更新时整目录写入。
+    match:
+      path_globs:
+        - '**\Application\*.*.*\**'
+        - '**\*-versions\*.*.*\**'
+
+  - id: app-update.electron-resources
+    name: Electron 应用资源
+    category: app-update
+    confidence: medium
+    description: Electron/Chromium 应用的 app.asar、resources 目录、resources.pak 与 dxcompiler.dll，更新时整包替换。
+    match:
+      path_globs:
+        - '**\resources\app.asar'
+        - '**\resources\app.asar.*'
+        - '**\resources\app\**'
+        - '**\resources.pak'
+        - '**\dxcompiler.dll'
+
+  - id: app-update.old-binary
+    name: 旧版本可执行文件
+    category: app-update
+    confidence: high
+    description: 更新过程留下的 old_*.exe 备份，通常可由应用重新生成或删除。
+    match:
+      path_globs:
+        - '**\old_*.exe'
+
+  - id: vcs.git-objects
+    name: Git 对象库
+    category: vcs
+    confidence: high
+    description: Git 仓库的松散对象与打包对象，克隆、提交和拉取都会增长；删除会影响仓库完整性。
+    match:
+      path_globs:
+        - '**\.git\objects\**'
+
+  - id: dev.python-venv
+    name: Python 虚拟环境
+    category: dev
+    confidence: high
+    description: Python 虚拟环境中的 site-packages 与二进制依赖，可由 pip 重新安装。
+    match:
+      path_globs:
+        - '**\.venv\Lib\site-packages\**'
+        - '**\.venv-*\Lib\site-packages\**'
+        - '**\venv\Lib\site-packages\**'
+
+  - id: user.downloads-singular
+    name: 下载目录
+    category: user-content
+    confidence: medium
+    description: 名为 Download 的用户下载目录；属于用户文件，只解释增长，不提供清理建议。
+    match:
+      path_globs:
+        - '**\Download\**'

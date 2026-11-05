@@ -41,6 +41,10 @@ func main() {
 		dbCmd(os.Args[2:])
 	case "config":
 		configCmd(os.Args[2:])
+	case "setup":
+		setupCmd(os.Args[2:])
+	case "tray":
+		trayCmd(os.Args[2:])
 	case "daily":
 		dailyCmd(os.Args[2:])
 	case "alerts":
@@ -78,6 +82,8 @@ usage:
   fat fileid <path>
   fat db init [--db path]
   fat config init|show [flags]
+  fat setup [flags]
+  fat tray [flags]
   fat daily [flags]
   fat alerts [flags]
   fat prune [flags]
@@ -123,6 +129,20 @@ report flags:
 serve flags:
   -addr string     listen address, loopback only (default "127.0.0.1:0")
   -top int         ranking rows per diff API call (default 20)
+  -open            open the dashboard in the default browser
+  -db string       database file
+
+setup flags:
+  -roots string    comma-separated scan roots, e.g. "D:\"
+  -install-tasks   install or replace the scheduled tasks
+  -no-tasks        only initialize the database and config
+  -open            open the dashboard when setup finishes
+  -db string       database file
+
+tray flags:
+  -addr string     listen address, loopback only (default "127.0.0.1:0")
+  -top int         ranking rows per diff API call (default 20)
+  -open            open the dashboard on startup
   -db string       database file (overrides FATTRACE_HOME)
 
 config flags:

@@ -56,6 +56,17 @@ func TestMatchSpecificity(t *testing.T) {
 		{`D:\AppData\Local\SomeApp\Cache\blob`, "blob", "app.generic-cache"},
 		{`D:\media\holiday.iso`, "holiday.iso", "images.iso"},
 		{`D:\data\shop.db-wal`, "shop.db-wal", "database.app"},
+		{`D:\SomeBrowser\SomeBrowser\Application\1.2.3.0\browser-updater.dll`, "browser-updater.dll", "app-update.versioned-dir"},
+		{`D:\FatTraceDemo\SomeIDE\.ide-versions\0.5.3\SomeIDE.exe`, "SomeIDE.exe", "app-update.versioned-dir"},
+		{`D:\FatTraceDemo\SomeIDE\.ide-versions\0.5.3\resources\app.asar.qoder-pending`, "app.asar.qoder-pending", "app-update.electron-resources"},
+		{`D:\SomeIDE2\resources\app.asar`, "app.asar", "app-update.electron-resources"},
+		{`D:\SomeEditor\old_Editor.exe`, "old_Editor.exe", "app-update.old-binary"},
+		{`D:\SomeEditor\261c84cb1e\resources\app\node_modules.asar`, "node_modules.asar", "app-update.electron-resources"},
+		{`D:\Projects\SAMPLE-PROJECT\.git\objects\4d\0665a86`, "0665a86", "vcs.git-objects"},
+		{`D:\FatTraceDemo\.venv-demo\Lib\site-packages\cv2\cv2.pyd`, "cv2.pyd", "dev.python-venv"},
+		{`D:\Download\setup_1.2.3.exe`, "setup_1.2.3.exe", "user.downloads-singular"},
+		{`D:\Games\steamapps\common\Game\dxcompiler.dll`, "dxcompiler.dll", "games.steam"},
+		{`D:\Work\proj\Application\src\main.go`, "main.go", ""},
 		{`D:\notes\plain.txt`, "plain.txt", ""},
 	}
 	for _, tc := range cases {
