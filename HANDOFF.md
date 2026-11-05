@@ -1,9 +1,11 @@
 # FatTrace 项目交接文档
 
-- 更新时间：2026-11-02
-- 状态：**M0–M7b 已完成并推送**（M7 `2882f39`，M7b `5dd8bd6`）；**M8a 非侵入式加固已完成代码、测试与文档，并已推送 master**（`e461de4`，CI 修复 `47365f0`，CI 稳定化 `81273c4`，最终文档 `3d5f09c`）；GitHub Actions `windows-latest` 最终 run `41032487559` 全绿。真实采集已连续到 **2026-11-02（快照 #15 weekly：483,531 文件 / 66,813 目录 / 255.69 GiB / 覆盖率 99.58% / 3 个错误）**；`#10→#15` 累计解释率 **70.50%**（3.7 天，10.93/15.51 GiB），10-31/11-01 单日仅 26.91%/44.45%，**11-05 的一周 ≥70% 门禁仍压线**。**2026-11-02 用户决定简化收尾：取消 M8b（安装器/ACL/提权任务/签名），11-05 用真实数据复核解释率作为唯一前置时间门禁；首份周报、首次文件行清理、14 天无人值守和 4 周 dogfood 改为发布后观察，不阻塞 v1.0。** 11-01 12:58 Weekly 与 Daily 同时补跑导致的锁冲突已修复（维护任务有界等锁 10 分钟），并已手动补跑成功（#15）；`reports/` 仍为空是因为还差第二份 weekly，预计 **2026-11-08** 生成首份周报。
+- 更新时间：2026-11-05
+- 状态：**M0–M7b 已完成并推送**（M7 `2882f39`，M7b `5dd8bd6`）；**M8a 非侵入式加固已完成代码、测试与文档，并已推送 master**（`e461de4`，CI 修复 `47365f0`，CI 稳定化 `81273c4`，最终文档 `3d5f09c`）；GitHub Actions `windows-latest` 最终 run `41032487559` 全绿。真实采集已连续到 **2026-11-05（快照 #19 daily：483,200 文件 / 66,761 目录 / 256.34 GiB / 覆盖率 99.12% / 3 个错误）**；原 69 条规则下 `#10→#19`（6.4 天）解释率 **60.01%**，**未达 70% 门禁**；按用户选择保留原记录并补规则后，同一数据重算 **88.07%**（17.78/20.18 GiB，详见下文与 `docs/m8a-results.md`）。**2026-11-02 用户决定简化收尾：取消 M8b（安装器/ACL/提权任务/签名），11-05 用真实数据复核解释率作为唯一前置时间门禁；首份周报、首次文件行清理、14 天无人值守和 4 周 dogfood 改为发布后观察，不阻塞 v1.0。** 11-01 12:58 Weekly 与 Daily 同时补跑导致的锁冲突已修复（维护任务有界等锁 10 分钟），并已手动补跑成功（#15）；`reports/` 仍为空是因为还差第二份 weekly，预计 **2026-11-08** 生成首份周报。
 - M8a 详情：`docs/m8a-results.md`。已加 doctor 自检、Host/Origin 校验、告警倍数阈值、导出泄露提示、AC-only 调度选项、README/SECURITY/CI/发布脚本；计划任务未重装，仍为 `LeastPrivilege` 且非 AC-only（doctor 会告警）。
 - 2026-11-02 全面修复（未提交）：维护任务等锁、单快照日事件清理、报告“其他目录”虚增三处已修复并有回归测试；真实库已补跑 #15 weekly。等用户 `git` 后提交。
+- 2026-11-02 可用性优化（未提交）：新增 `fat serve --open`、`fat setup` 首次引导、`fat tray` 纯 Go 托盘启动器；完整测试、Win32 图标/菜单集成测试与真实库冒烟均通过。等用户 `git` 后提交。
+- **2026-11-05 门禁结果**：快照 **#19**（11-05 03:00，483,200 文件 / 66,761 目录 / 256.34 GiB / 覆盖率 99.12% / 3 错误）完整。原 69 条规则下 `#10→#19`（6.4 天）解释率 **60.01%**，**未达 70% 门禁**；按用户选择保留原记录并补规则后，同一数据重算 **88.07%**（17.78/20.18 GiB），unexplained 2.41 GiB。新增 6 条规则后共 **75 条 / 20 类**；卷级校验 7.35% WARN。原门禁失败与补规则后的结果必须分开表述。
 - 项目根目录：`D:\FatTraceDemo\FatTrace`
 
 ## 0. 项目一句话
@@ -43,7 +45,11 @@ FatTrace/
   cmd/fat/snap.go               CLI: snap（进度、Ctrl+C/Ctrl+Break、JSON）
   cmd/fat/diff.go               CLI: diff（配对、--week、Top-N、解释层、表格/JSON，只读连接）
   cmd/fat/report.go             CLI: report（单文件 HTML + 解释面板，只读连接）
-  cmd/fat/serve.go              CLI: serve（回环监听、每会话 token、打印 #t= URL）
+  cmd/fat/serve.go              CLI: serve（回环监听、每会话 token、打印 #t= URL、--open 调系统浏览器）
+  cmd/fat/setup.go              CLI: setup（初始化/迁移、配置补全、roots 引导、计划任务检查与可选安装）
+  cmd/fat/tray.go               CLI: tray（单实例托盘、内置只读服务、面板/扫描/数据目录/退出）
+  cmd/fat/browser_windows.go    回环 URL 校验 + rundll32 打开默认浏览器
+  cmd/fat/setup_test.go         setup 辅助函数与 URL 安全拒绝测试
   internal/model/model.go       FileRecord / ScanError / ScanStats
   internal/model/diff.go        DiffResult / FileChange / DirChange / FileCandidate / Explanation / RuleRef
   internal/diff/diff.go         纯函数引擎：FRN join、分类、move 归属、Top-N、OnFileChange 观察者
@@ -53,7 +59,7 @@ FatTrace/
   internal/diff/observer_test.go 观察者全量路径 + Top-N 截断测试
   internal/rules/rules.go       YAML 规则加载/校验/合并、通配符匹配、特异性
   internal/rules/apply.go       rules.Diff：观察者聚合解释率、未解释榜单、榜单规则标注
-  internal/rules/builtin.yaml   内嵌 69 条规则、18 个类别
+  internal/rules/builtin.yaml   内嵌 75 条规则、20 个类别
   internal/rules/rules_test.go  7 个规则/聚合/标注测试
   internal/config/config.go     <db_dir>/config.yaml：调度、保留、告警；默认值/校验/UTF-8 YAML
   internal/config/config_test.go 9 个配置/调度时间测试
@@ -68,6 +74,8 @@ FatTrace/
   internal/doctor/doctor.go     只读自检：配置/库/覆盖率/快照/规则/计划任务
   internal/doctor/elevation_windows.go 当前进程令牌是否提权
   internal/doctor/doctor_test.go 5 个自检测试
+  internal/tray/tray_windows.go  纯 Go Win32 托盘：Shell_NotifyIconW、消息窗口、右键菜单、单实例、气泡
+  internal/tray/tray_windows_test.go 结构体尺寸/UTF-16/单实例测试 + 受门禁的真实图标与菜单集成测试
   internal/logfile/logfile.go   维护日志轮转（5 MiB × 3）
   internal/logfile/logfile_test.go 2 个轮转/重开测试
   cmd/fat/config.go             CLI: config init/show
@@ -190,12 +198,12 @@ FatTrace/
 
 ### M6 已实现（解释层）
 
-- `internal/rules`：`builtin.yaml` 内嵌 **69 条规则 / 18 类**（toolchain 9、package 9、system 8、app-cache 8、logs 5、browser 5、crash 4、security 3、dev 3、temp 2、images 2、games 2、container 2、backup 2、app-data 2、user-content 1、recycle 1、database 1）。
+- `internal/rules`：`builtin.yaml` 内嵌 **75 条规则 / 20 类**（toolchain 9、package 9、system 8、app-cache 8、logs 5、browser 5、crash 4、security 3、dev 4、temp 2、images 2、games 2、container 2、backup 2、app-data 2、user-content 2、app-update 3、recycle 1、database 1、vcs 1）。
 - 匹配语义：整段路径 glob（`*`/`?` 段内、`**` 跨段），大小写不敏感、统一反斜杠；`path_globs` 与 `name_globs` 同时存在必须同时命中；**字面量最多者胜**，同分用户规则优先。规则只标注，不改 Δ。
 - 用户规则：`<db_dir>/rules.yaml`（`version: 1`），同 ID 覆盖内置；缺失不报错，语法/未知字段/非法 confidence 直接失败。进程内只加载一次，改后重启。
 - 解释率：分母 = 新增 + 变大文件的 `DeltaAlloc`；删除/缩小/move 不计；文件级累计不重复；未解释按 Δ 降序保留 50 个 + 总数；`net_growth_bytes` 单独展示净 Δ。
 - 全量覆盖：diff 新增 `OnFileChange` 观察者，在路径解析后、Top-N 截断前逐条回调；未设置观察者时行为与 M3 完全一致。
-- 接入：`fat diff` 输出解释率/类别/未解释 Top 10 与榜单标签；`fat report` 增加解释率 KPI、<70% 横幅、类别条形图、未解释 Top 50 与行内规则标签；`fat serve` 的 `/api/diff` 带 `explanation`，新增 `GET /api/rules`，SPA 总览/对比显示解释面板、规则页显示 69 条真实规则。
+- 接入：`fat diff` 输出解释率/类别/未解释 Top 10 与榜单标签；`fat report` 增加解释率 KPI、<70% 横幅、类别条形图、未解释 Top 50 与行内规则标签；`fat serve` 的 `/api/diff` 带 `explanation`，新增 `GET /api/rules`，SPA 总览/对比显示解释面板、规则页显示 75 条真实规则。
 - 实测：工作区 `#7 → #8`（真实 `go get`/build/日志/用户文件增长）观测增长 62.80 MiB，已解释 58.80 MiB，**93.63%**，未解释 4.00 MiB（用户二进制与源码）；D: `#2 → #3` 137.81 MiB 观测增长解释率四舍五入 100.00%（未解释 760 B），但样本几乎全是 FatTrace 自身 DB，仅作卷根路径补充。细节见 `docs/m6-results.md`。
 
 ### M7 已实现（调度、保留与告警）
@@ -265,6 +273,42 @@ FatTrace/
 - 真实库：新二进制补跑 `fat maintain --kind weekly` 成功生成 **#15**；`reports/` 仍为空（`weeklyPair` 需两份 weekly），预计 11-08 生成首份；doctor `9 ok / 3 warn / 0 fail`；`#10→#15` 解释率 **70.50%**，卷级校验 **0.74% OK**；数据库 543.28 MiB。
 - 待办：等用户 `git` 后提交这批修复；11-05 复核一周解释率仍是唯一前置门禁。
 
+### 可用性优化（2026-11-02，未提交）
+
+针对“要挂着开发环境 / 手动复制 token URL 才能用”的体验问题，按用户“你来计划统筹”的授权完成三项，不改变扫描、diff、调度和数据库口径：
+
+- **`fat serve --open`**：服务启动后调用 `rundll32 url.dll,FileProtocolHandler` 打开默认浏览器；只接受 http/https 且 host 为 `127.0.0.1` / `localhost` / `::1` 的 URL，拒绝 `file:`、`javascript:` 与外部主机（有单测）。token 仍只在 URL `#t=` 片段中，不写入日志或配置。
+- **`fat setup`**：一条命令完成首次运行——打开/迁移数据库并打印 schema、大小、快照数；读取或生成 `config.yaml`（0600）；TTY 下提示输入扫描根，非交互必须 `-roots`；检查 roots 是否存在、是否为卷根（子目录会警告，因为 diff/日汇总只配对整卷快照）；检查两个计划任务，全部存在则不动，缺失时交互询问或由 `-install-tasks` 明确安装；打印下一步命令，`-open` 可直接起服务。`-no-tasks` 用于只配置、不碰任务。
+- **`fat tray`**：纯 Go + `golang.org/x/sys/windows` 的 Win32 托盘，无 CGO、无第三方 GUI 库。`Shell_NotifyIconW` 注册图标，消息专用窗口（`HWND_MESSAGE`）接收回调；右键 `TrackPopupMenu` 菜单（打开面板 / 立即扫描 / 最近快照与下次运行 / 打开数据目录 / 退出），双击打开面板；命名互斥量保证单实例；启动时隐藏自有控制台。托盘内启动与 `serve` 相同的随机回环 + 每会话 token 服务，只读；工具提示显示最新完整快照和下次计划时间。DB 缺失时弹出错误框并提示 `fat setup`。
+- `go.mod`：`github.com/mattn/go-isatty` 与 `golang.org/x/sys` 由间接依赖转为直接依赖。
+
+验证：
+
+- `gofmt` / `go vet ./...` 通过；`go test ./... -count=1` 全包通过（含 `cmd/fat` 与 `internal/tray`）。
+- 托盘 ABI 测试：`NOTIFYICONDATAW` 976 B、`MSG` 48 B、`WNDCLASSEXW` 80 B；单实例互斥测试通过。
+- 受门禁的真实集成测试 `FATTRACE_TRAY_UI_TEST=1 go test ./internal/tray -run ShellIcon`：`Shell_NotifyIconGetRect` 返回图标矩形 `(2105,1368)-(2153,1440)`；右键回调后 `FindWindowW("#32768")` 命中本进程弹出菜单并可正常关闭。
+- `fat serve --open`（真实库）：Chrome 打开 `127.0.0.1` 随机端口，总览正常；无 token 请求 `/api/status` 返回 401。
+- `fat setup`：临时库上两次运行均成功且第二次幂等，`-no-tasks` 未触碰系统任务；真实库（`FATTRACE_HOME` 指向 `.cache\fattrace`）运行只打印现状（15 快照、两任务已存在），未做任何改动，同时提示 `ac_only` 配置与已装旧任务不一致。
+- `fat tray --db <真实库>`：进程常驻，监听 `127.0.0.1` 随机端口，无 token 返回 401；结束后无残留进程。
+- 限制：当前会话无法可靠截取自动隐藏的任务栏，菜单是 Win32 窗口探测验证而非人工像素点击；`fat setup -install-tasks` 会把旧任务改成 AC-only，属系统级变更，未在真实库执行。
+
+### 2026-11-05 一周门禁与补规则重评
+
+- **口径**：`#10`（2026-10-29 17:27）→ `#19`（2026-11-05 03:00），6.4 天；两者均为整卷 complete。`#19`：483,200 文件 / 66,761 目录 / 256.34 GiB / 覆盖率 99.12% / 3 个扫描错误。卷级校验 root Δ +13.80 GiB vs volume Δ +14.89 GiB（**7.35% WARN**）。
+- **原始门禁（69 条规则）**：解释率 **60.01%**（12.11/20.18 GiB），unexplained **8.07 GiB**，**未达 70%**。主因是应用更新：Tabbit 1.20.21 多副本、ZCode、VS Code（含 `old_Code.exe`）、DeepSeek_Harness、Qoder CN 版本目录，以及 GitHub `.git` 对象；这类更新“新版本写入、旧版本删除”，而解释率分母只计正增长。
+- **处理**：按用户选择保留 60.01% 作为正式门禁失败记录，另补 6 条通用规则后独立重评：
+  - `app-update.versioned-dir`：`Application\*.*.*\`、`*-versions\*.*.*\`（应用版本目录）
+  - `app-update.electron-resources`：`resources\app.asar*`、`resources\app\**`、`resources.pak`、`dxcompiler.dll`（Electron/Chromium 资源）
+  - `app-update.old-binary`：`old_*.exe`（更新留下的旧可执行文件）
+  - `vcs.git-objects`：`.git\objects\**`
+  - `dev.python-venv`：`.venv*\Lib\site-packages\**`、`venv\...`
+  - `user.downloads-singular`：`Download\**`（单数下载目录）
+  规则总数 **75 条 / 20 类**（新增 `app-update` 3 条、`vcs` 1 条，`dev`/`user-content` 各补 1 条）。
+- **补规则后（同一份数据）**：解释率 **88.07%**（17.78/20.18 GiB），unexplained **2.41 GiB**；类别：游戏安装 9.57 GiB、应用更新 **4.96 GiB**、开发依赖与产物 1.73 GiB、语言工具链 681 MiB、应用数据库 398 MiB、版本控制 351 MiB、用户文件 88 MiB。
+- **残余未解释 Top**：DeepSeek Harness.exe 235 MiB、ZCode.exe 235 MiB、VS Code Code.exe 228 MiB、biubiu.exe 150 MiB、GameViewer.exe 70 MiB 等应用主程序；未为这些单独加窄规则，避免按应用名过拟合。
+- **解释**：原门禁是 60.01%，补规则后的 88.07% 属于事后改进，不是原门禁通过；两者必须同时记录。`app-update` 规则为 medium confidence，`Application\*.*.*` 与 `resources\app` 对非 Electron 项目可能存在少量误匹配；真实库样本中 Top 命中为 Tabbit/Qoder/ZCode/VS Code 等应用更新。全量 `go vet` 与测试通过，新增规则匹配用例。
+- **结论**：在“原规则 60.01% 失败、补规则后 88.07%”的双重记录下，v1.0 的解释能力已达到 70% 目标；是否据此定稿由用户确认。卷级校验 7.35% WARN 仍是数据口径风险，建议在发布说明中保留。
+
 ### 当前 CLI
 
 ```bash
@@ -286,7 +330,12 @@ FatTrace/
 ./fat.exe report --week --top 20 --out week.html
 ./fat.exe report --from 7 --to 8 --out report.html
 ./fat.exe serve                        # 默认库、随机回环端口，打印带 token 的 URL
+./fat.exe serve --open                 # 启动后直接用默认浏览器打开面板
 ./fat.exe serve --db 'D:\...\fattrace.db' --addr 127.0.0.1:8765
+./fat.exe setup                        # 首次引导：建库/配置、roots、任务检查，打印下一步
+./fat.exe setup -roots "D:\" -no-tasks -open   # 只配置不碰任务，并直接打开面板
+./fat.exe tray                         # 托盘常驻（单实例），右键管理、双击打开面板
+./fat.exe tray --db 'D:\...\fattrace.db' --open
 ./fat.exe serve --top 50               # 调整 diff 榜单条数
 ./fat.exe config init -roots "D:\"     # 写 <db_dir>/config.yaml（已存在需 --force）
 ./fat.exe config show [--json]
@@ -520,6 +569,7 @@ FatTrace/
 
 - 计划任务提权时，二进制必须放 `%ProgramFiles%\FatTrace\` 并限制 ACL；配置/DB 放 `%LOCALAPPDATA%`，任务不能指向用户可写目录。**M8b 已按用户 2026-11-02 决定取消**：继续便携 exe + `InteractiveToken + LeastPrivilege`，不提权、不安装到 Program Files、不做 ACL/签名；这样反而没有本地提权面。代价是 C: 受保护目录不可读（78.73%），D: 当前 99.57% 可接受。
 - 本地 server 仅绑 `127.0.0.1`（启动时强制回环），随机端口 + 每会话 token；M8a 起校验 `Host` 只能为 localhost/回环 IP（421）与同源 `Origin`（403），无 CORS；快照含全盘路径，不云同步。
+- `fat tray` 复用同一个回环 + token 服务，不额外开放端口；单实例互斥量为 `Local\FatTraceTray`。托盘不写注册表/启动项，不会开机自启；“立即扫描”以隐藏窗口运行 `fat maintain --kind daily`，与计划任务共享写锁（有界等锁 10 分钟），不提权。
 - HTML 报告与 weekly 报告含完整路径，页脚已提示分享风险；`fat report` 终端也会提醒。报告/日志/DB 都按本地敏感数据对待。
 - `schedule.ac_only` 默认 true，但已安装的旧任务仍是 `ac_only=false`；`fat doctor` / `fat schedule status` 会显示不一致，确认后才能 `fat schedule install --force` 重装。
 - `fat prune --apply` 会不可逆地删除 FatTrace 库内快照/文件明细/汇总（不碰用户文件）；实例 `auto_prune` 已开启（daily/weekly），首次真实清理预计 2026-11-05 之后；执行前可先 `fat prune` dry-run，重大保留期调整先在副本验证。
@@ -533,7 +583,7 @@ FatTrace/
 
 新对话可以直接发：
 
-> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`。M8a 已完成并推送（HEAD `3d5f09c`，CI 全绿）；按用户决定简化收尾：**M8b 已取消，11-05 用真实数据复核解释率（≥70%）作为唯一前置门禁**，首份周报/首次清理/14 天/4 周均为发布后观察。当前 `#10→#15` 为 70.50%，11-01 Weekly 锁冲突已修复并用 #15 补跑，首份周报预计 11-08；工作区还有等锁/事件清理/报告瓦片三项修复未提交，等用户说“git”。保持“所有工具/缓存都在工作区”；系统级改动必须先确认；未出现“git”不得提交或推送。
+> 读取 `D:\FatTraceDemo\FatTrace\HANDOFF.md`，先 source `D:\FatTraceDemo\tools\env.sh`。HEAD `59f01f6`；按用户决定简化收尾：**M8b 已取消，11-05 用真实数据复核解释率（≥70%）作为唯一前置门禁**，首份周报/首次清理/14 天/4 周均为发布后观察。当前 `#10→#15` 为 70.50%，首份周报预计 11-08；工作区还有全面修复（等锁/事件清理/瓦片 residual）与可用性优化（`serve --open`、`setup`、`tray`）未提交，等用户说“git”。日常入口可用 `fat setup` 首次引导、`fat tray` 托盘、`fat serve --open` 直接打开面板。保持“所有工具/缓存都在工作区”；系统级改动必须先确认；未出现“git”不得提交或推送。
 
 接手后先跑：
 
@@ -556,6 +606,9 @@ DB='D:\FatTraceDemo\.cache\fattrace\fattrace.db'
 tail -n 30 'D:\FatTraceDemo\.cache\fattrace\logs\maintain.log'
 dir 'D:\FatTraceDemo\.cache\fattrace\reports'
 ./fat.exe serve --db "$DB" --addr 127.0.0.1:0
+./fat.exe setup --no-tasks --db "$DB"   # 只读检查现状，不应改动任何文件
+./fat.exe serve --open --db "$DB"       # 直接打开面板
+./fat.exe tray --db "$DB"               # 常驻托盘；从右键菜单退出
 ```
 
-确认测试全绿、`fat diff`/`fat report`/`fat serve` 能复现 `docs/m3`–`docs/m7b` 的输出（`#7→#8` 解释率 93.63%，`#3→#9` 99.37%，规则页 69 条），再检查 `docs/m7-results.md`、`docs/m7b-results.md`、`docs/m8a-results.md` 里的门禁与偏差。`fat doctor` 在真实库应显示 `0 fail`；两个旧任务的 `not AC-only` 警告在未重装前属预期。若已积累 ≥7 天计划任务数据，用 `fat daily --days 3` 重算并按实际结果更新文档；#15 已补跑，第二份 weekly 在 2026-11-08 04:00，预计当天生成首份真实周报。
+确认测试全绿、`fat diff`/`fat report`/`fat serve` 能复现 `docs/m3`–`docs/m7b` 的输出（`#7→#8` 解释率 93.63%，`#3→#9` 99.37%，规则页 75 条），再检查 `docs/m7-results.md`、`docs/m7b-results.md`、`docs/m8a-results.md` 里的门禁与偏差。`fat doctor` 在真实库应显示 `0 fail`；两个旧任务的 `not AC-only` 警告在未重装前属预期。若已积累 ≥7 天计划任务数据，用 `fat daily --days 3` 重算并按实际结果更新文档；#15 已补跑，第二份 weekly 在 2026-11-08 04:00，预计当天生成首份真实周报。

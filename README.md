@@ -17,12 +17,13 @@ FatTrace 是一个面向 Windows 10/11 + NTFS 的本地磁盘增长追踪工具�
 
 - 基于 `NtQueryDirectoryFile` + FileID 的快速枚举，硬链接去重，长路径支持。
 - 快照 diff：新增、变大、变小、删除、文件/目录 move 与 rename，目录归因。
-- 约 70 条内置规则解释增长（缓存、日志、容器、开发产物等），支持用户 `rules.yaml` 覆盖。
+- 75 条内置规则解释增长（缓存、日志、容器、开发产物、应用更新等），支持用户 `rules.yaml` 覆盖。
 - 单文件 HTML 报告：概览、treemap、增长/删除 Top、解释率、扫描错误。
 - 只读本地网页：总览、下钻、快照对比、时间轴、日汇总、告警、配置与规则查看。
 - 日汇总、增长率告警（绝对量 / 占比 / 相对中位数倍数）与静默窗口。
 - 保留策略与自动周报；文件行降采样，目录聚合长期保留。
 - Windows 计划任务：每日/每周扫描、错过后补跑、可仅交流电运行。
+- 首次运行引导（`fat setup`）与托盘启动器（`fat tray`）：托盘右键可打开面板、立即扫描、查看下次运行、退出。
 - `fat doctor` 自检：配置、数据库完整性、快照新鲜度、覆盖率、规则、存储空间、计划任务。
 
 ## 环境要求
@@ -52,27 +53,20 @@ powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 0.1.0
 数据库默认位于 `%LOCALAPPDATA%\FatTrace\fattrace.db`。`--db` 覆盖文件路径，`FATTRACE_HOME` 覆盖目录。
 
 ```powershell
-# 1. 初始化数据库
-.\fat.exe db init
+# 1. 首次运行：初始化数据库、生成配置、按提示填写扫描根
+.\fat.exe setup
 
-# 2. 生成配置（显式写明要扫描的卷；不写 roots 不会安装计划任务）
-.\fat.exe config init -roots "D:\"
+# 2. 采集第一份快照（setup 的 next 会给出可直接复制的命令）
+.\fat.exe maintain --kind daily
 
-# 3. 第一次手动快照
-.\fat.exe snap --kind manual "D:\"
+# 3. 日常使用：托盘启动器；右键图标可打开面板、立即扫描、退出
+.\fat.exe tray
 
-# 4. 计算日汇总与告警
-.\fat.exe daily
-.\fat.exe alerts
-
-# 5. 两次快照后生成 HTML 报告
-.\fat.exe report --out .\fattrace-report.html
-
-# 6. 打开只读网页（终端会打印带 token 的地址）
-.\fat.exe serve
+# 只开网页、不要托盘
+.\fat.exe serve --open
 ```
 
-首次只有一份快照时，diff/报告没有可比对象，这是正常的；等第二次快照后再看。
+`fat setup` 会检查计划任务：全部已存在时不做改动；缺失时交互式询问是否安装，非交互环境需显式 `-install-tasks`。`fat tray` 常驻并在随机回环端口启动只读网页，双击图标打开面板；它不会自动加入开机启动。首次只有一份快照时，diff/报告没有可比对象，这是正常的；等第二次快照后再看。
 
 ## 计划任务
 
@@ -96,11 +90,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 0.1.0
 
 | 命令 | 作用 |
 | --- | --- |
+| `fat setup` | 首次配置：初始化数据库、生成/补全配置、检查并可选安装计划任务 |
+| `fat tray` | 托盘启动器：常驻图标，右键打开面板、立即扫描、退出；自动启动只读网页 |
 | `fat scan <root>` | 只枚举并打印统计，不写数据库 |
 | `fat snap [--kind daily\|weekly\|manual] <root>` | 采集快照并写入数据库 |
 | `fat diff` | 比较两次快照，输出增长/删除 Top |
 | `fat report` | 生成单文件离线 HTML 报告 |
-| `fat serve` | 启动只读本地网页 |
+| `fat serve` | 启动只读本地网页；`--open` 直接用系统浏览器打开 |
 | `fat daily` | 重算最近日汇总 |
 | `fat alerts` | 评估增长告警；`--mute 24h` / `--unmute` |
 | `fat prune` | 清理 FatTrace 自己的过期历史；默认 dry-run，`--apply` 才执行 |
@@ -136,6 +132,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 0.1.0
 - 枚举期间发生变化的文件可能造成少量瞬时误差；不是块级快照。
 - 不支持 FAT/exFAT/ReFS、网络共享、跨卷硬链接和文件内容分析。
 - 不是实时监控，也不是杀毒/勒索软件防护工具；只按计划给出增长线索。
+- `fat tray` 不安装开机自启动项；需要开机常驻时请自行放入启动文件夹（这是用户侧系统变更）。
 - 安装到 `Program Files`、签名与提权安装尚未提供；当前推荐以普通用户运行。
 
 ## 排障
@@ -160,6 +157,10 @@ go test ./... -count=1
 go build ./cmd/fat
 ```
 
-测试覆盖扫描、存储、diff、规则、报告、服务端、告警、保留策略、计划任务解析和 doctor。部分用例会创建临时 SQLite 数据库；不会触碰真实数据库。
+测试覆盖扫描、存储、diff、规则、报告、服务端、告警、保留策略、计划任务解析、setup 与 doctor。部分用例会创建临时 SQLite 数据库；不会触碰真实数据库。托盘的 Win32 结构体与单实例测试默认运行，真实图标/菜单集成测试需显式开启：
+
+```powershell
+$env:FATTRACE_TRAY_UI_TEST = "1"; go test .\internal\tray -run ShellIcon -v -count=1
+```
 
 项目决策与各里程碑验收记录见 [HANDOFF.md](HANDOFF.md) 和 `docs/`。

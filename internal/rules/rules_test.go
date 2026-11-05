@@ -56,6 +56,17 @@ func TestMatchSpecificity(t *testing.T) {
 		{`D:\AppData\Local\SomeApp\Cache\blob`, "blob", "app.generic-cache"},
 		{`D:\media\holiday.iso`, "holiday.iso", "images.iso"},
 		{`D:\data\shop.db-wal`, "shop.db-wal", "database.app"},
+		{`D:\Tabbit\Tabbit\Application\1.20.21.0\Tabbit.dll`, "Tabbit.dll", "app-update.versioned-dir"},
+		{`D:\FatTraceDemo\Qoder CN\.qoder-versions\0.5.3\Qoder CN.exe`, "Qoder CN.exe", "app-update.versioned-dir"},
+		{`D:\FatTraceDemo\Qoder CN\.qoder-versions\0.5.3\resources\app.asar.qoder-pending`, "app.asar.qoder-pending", "app-update.electron-resources"},
+		{`D:\ZCode\resources\app.asar`, "app.asar", "app-update.electron-resources"},
+		{`D:\Microsoft VS Code\old_Code.exe`, "old_Code.exe", "app-update.old-binary"},
+		{`D:\Microsoft VS Code\261c84cb1e\resources\app\node_modules.asar`, "node_modules.asar", "app-update.electron-resources"},
+		{`D:\GitHub_Project\ZERO-TO-HERO\.git\objects\4d\0665a86`, "0665a86", "vcs.git-objects"},
+		{`D:\FatTraceDemo\.venv-ctf\Lib\site-packages\cv2\cv2.pyd`, "cv2.pyd", "dev.python-venv"},
+		{`D:\Download\uuyc_4.45.1.exe`, "uuyc_4.45.1.exe", "user.downloads-singular"},
+		{`D:\Games\steamapps\common\Game\dxcompiler.dll`, "dxcompiler.dll", "games.steam"},
+		{`D:\Work\proj\Application\src\main.go`, "main.go", ""},
 		{`D:\notes\plain.txt`, "plain.txt", ""},
 	}
 	for _, tc := range cases {

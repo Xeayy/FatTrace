@@ -128,9 +128,80 @@ fat ... version → 0.1.0-m8a
 - 验证：`go vet ./...` 与全量测试全绿；新增锁等待成功/超时、单快照事件清理、负增长瓦片 3 组回归测试。
 - 真实库：新二进制补跑 `fat maintain --kind weekly` 成功生成 **#15**（483,531 文件 / 255.69 GiB / 覆盖率 99.58%）；`reports/` 待 11-08 第二份 weekly；doctor `9 ok / 3 warn / 0 fail`；`#10→#15` 解释率 **70.50%**，卷级校验 **0.74% OK**；数据库 543.28 MiB。
 
+## 可用性优化（2026-11-02，未提交）
+
+用户授权“计划统筹”后，补上首次使用与日常入口，不改变扫描、diff、调度和数据库口径：
+
+- **`fat serve --open`**：启动只读服务后打开系统默认浏览器；仅接受 http/https 且 host 为回环地址的 URL（`file:`、`javascript:`、外部主机拒绝，有单测）。token 仍只在 URL `#t=` 片段。
+- **`fat setup`**：初始化/迁移数据库、读取或生成 `config.yaml`（0600）、TTY 下引导填写扫描根、检查 roots 可用性与是否卷根、检查并可选安装缺失的计划任务、打印下一步；`-open` 可直接起服务。已存在的任务不改动；`-install-tasks` 是显式的系统级变更。
+- **`fat tray`**：纯 Go Win32 托盘，`Shell_NotifyIconW` + 消息专用窗口 + `TrackPopupMenu`，命名互斥量单实例，隐藏自有控制台。菜单含打开面板、立即扫描、最近快照/下次运行、打开数据目录、退出；双击打开面板。内部启动与 `serve` 相同的随机回环 + 每会话 token 服务。DB 缺失时弹错误框指引 `fat setup`。不安装开机自启项。
+- 依赖：`go-isatty` 与 `golang.org/x/sys` 转为直接依赖。
+
+验证：
+
+```text
+gofmt / go vet ./...                         通过
+go test ./... -count=1                       全部通过
+FATTRACE_TRAY_UI_TEST=1 go test ./internal/tray -run ShellIcon -v
+  icon rect (2105,1368)-(2153,1440)           通过
+  popup menu hwnd=0x170ee8 打开并可关闭        通过
+fat serve --open（真实库）                     浏览器打开总览；无 token 401
+fat setup（临时库，两次）                       幂等；-no-tasks 未触碰系统任务
+fat setup（真实库，FATTRACE_HOME）              仅打印现状，无改动
+fat tray --db（真实库）                         常驻、回环监听、无 token 401
+```
+
+ABI 与边界：
+
+- 测试锁定 `NOTIFYICONDATAW` = 976 B、`MSG` = 48 B、`WNDCLASSEXW` = 80 B（amd64）。
+- 托盘回调鼠标消息取 `lParam` 低 16 位匹配，兼容不同 NOTIFYICON_VERSION。
+- 菜单验证通过 `FindWindowW("#32768")` 确认属于本进程并发送 `WM_CANCELMODE`/`VK_ESCAPE` 关闭；当前会话无法截取自动隐藏的任务栏，因此未做人工像素点击。
+- 真实库 `config.yaml` 为 `ac_only: true`，已装旧任务为 `ac_only=false`；`setup` 会提示该不一致，但未执行 `-install-tasks`，避免未经确认修改计划任务。
+
+## 2026-11-05 一周门禁结果（原始规则 + 补规则重评）
+
+**口径**：`#10`（2026-10-29 17:27）→ `#19`（2026-11-05 03:00），6.4 天；两者均为整卷 complete。`#19` = 483,200 文件 / 66,761 目录 / 256.34 GiB / 覆盖率 99.12% / 3 个扫描错误。卷级校验 root Δ +13.80 GiB vs volume Δ +14.89 GiB，**7.35% WARN**。
+
+**原始门禁（69 条规则）**：
+
+```text
+explanation: 60.01% (12.11 GiB / 20.18 GiB)
+unexplained: 8.07 GiB
+```
+
+**未达标**。主要未解释项是应用更新：Tabbit 1.20.21 多副本、ZCode、VS Code（含 `old_Code.exe`）、DeepSeek_Harness、Qoder CN 版本目录，以及 GitHub `.git` 对象。应用更新通常“新版本写入、旧版本删除”，而解释率分母只计正增长，因此会结构性拉低解释率。
+
+**按用户选择的处理**：保留 60.01% 作为正式门禁失败记录；另补 6 条通用规则，用同一份 `#10→#19` 数据独立重评：
+
+- `app-update.versioned-dir`：`Application\*.*.*\`、`*-versions\*.*.*\`
+- `app-update.electron-resources`：`resources\app.asar*`、`resources\app\**`、`resources.pak`、`dxcompiler.dll`
+- `app-update.old-binary`：`old_*.exe`
+- `vcs.git-objects`：`.git\objects\**`
+- `dev.python-venv`：`.venv*\Lib\site-packages\**`、`venv\...`
+- `user.downloads-singular`：`Download\**`
+
+规则总数 **75 条 / 20 类**（新增 `app-update` 3 条、`vcs` 1 条，`dev`/`user-content` 各补 1 条）。
+
+**补规则后（同一份数据）**：
+
+```text
+explanation: 88.07% (17.78 GiB / 20.18 GiB)
+unexplained: 2.41 GiB
+categories: 游戏安装 9.57 GiB · 应用更新 4.96 GiB · 开发依赖与产物 1.73 GiB
+            语言工具链 681 MiB · 应用数据库 398 MiB · 版本控制 351 MiB · 用户文件 88 MiB
+```
+
+**结论与边界**：
+
+- 原门禁 **60.01% 失败**；补规则后 **88.07%**，属于事后改进，不是原门禁通过，两者必须同时记录。
+- `app-update` 为 medium confidence；`Application\*.*.*` 与 `resources\app` 对非 Electron 项目可能有少量误匹配，本样本 Top 命中为 Tabbit/Qoder/ZCode/VS Code 等真实应用更新。
+- 残余未解释 Top 为应用主程序（DeepSeek Harness.exe、ZCode.exe、VS Code Code.exe、biubiu.exe 等），未按应用名加窄规则，避免过拟合。
+- 卷级校验 7.35% WARN 说明扫描口径仍漏掉约 1 GiB 卷级增长，发布说明应保留该风险。
+- 全量 `go vet` 与测试通过，新增规则匹配用例；规则页与文档计数同步为 75 条。
+
 ## 收尾标准（2026-11-02 简化）
 
-- **唯一前置门禁，2026-11-05**：用 10-29 起真实数据复核一周解释率 ≥70%（不得用两日数据替代）；达标即定稿 v1.0。2026-11-02 的 `#10→#15` 为 70.50%，仍处压线状态，最终以 11-05 数据为准。
+- **唯一前置门禁，2026-11-05**：已用 10-29 起真实数据复核。原始 69 条规则下 `#10→#19` 解释率 **60.01%**，未达 70%；补 6 条通用应用更新/版本控制规则后同一数据为 **88.07%**。原失败记录与补规则后的结果同时保留；定稿 v1.0 时应在发布说明中明确这是“补规则后达标”，而非原始门禁直接通过。
 - **发布后观察，不阻塞 v1.0**：11-06 首次真实文件行清理、11-08 首份真实 weekly 报告、11-12 起 14 天无人值守、4 周 dogfood。
 - **已修复**：11-01 Weekly 与 Daily 同时补跑时的数据库锁冲突；维护任务现在有界等锁，且已补跑 #15。首份周报预计 2026-11-08。
 - **M8b 取消**：不做安装器/ACL/提权任务/签名；保留便携 exe + 非提权任务，接受 C: 覆盖率缺口。
@@ -142,4 +213,4 @@ fat ... version → 0.1.0-m8a
 - `81273c4` test: 吞吐测试三次取最佳，CI 门槛 80k 适配共享 runner（已推送 master，Actions 全绿）。
 - `3d5f09c` docs: 记录 CI 稳定化（已推送 master，Actions 全绿）。
 - 原先建议拆成 3 个提交；实际按里程碑合并为 1 个，便于整体回滚。CI 修复与本文档状态由后续提交补充。
-- 2026-11-02 的“简化收尾”决定（取消 M8b、11-05 唯一前置门禁）与“全面修复”（等锁、事件清理、瓦片 residual）已写入本文与 HANDOFF，等待用户 `git` 后提交。
+- 2026-11-02 的“简化收尾”决定（取消 M8b、11-05 唯一前置门禁）、“全面修复”（等锁、事件清理、瓦片 residual）、“可用性优化”（`serve --open`、`setup`、`tray`）与 2026-11-05 门禁结果（原始 60.01% 失败、补规则后 88.07%）已写入本文与 HANDOFF，等待用户 `git` 后提交。
