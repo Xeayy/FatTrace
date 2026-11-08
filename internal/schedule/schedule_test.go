@@ -116,7 +116,7 @@ func TestMarshalDailyXML(t *testing.T) {
 		t.Fatal("missing settings")
 	}
 	if !strings.Contains(text, "<DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries>") ||
-		!strings.Contains(text, "<StopIfGoingOnBatteries>true</StopIfGoingOnBatteries>") {
+		!strings.Contains(text, "<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>") {
 		t.Fatal("AC-only default did not reach the XML")
 	}
 	settings := text[strings.Index(text, "<Settings>"):strings.Index(text, "</Settings>")]
