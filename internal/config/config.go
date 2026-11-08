@@ -35,8 +35,9 @@ type Schedule struct {
 	Roots    []string `yaml:"roots" json:"roots"`
 	DailyAt  string   `yaml:"daily_at" json:"daily_at"`
 	WeeklyAt string   `yaml:"weekly_at" json:"weekly_at"`
-	// ACOnly keeps scans off battery power: planned runs wait until the
-	// machine is plugged in. Manual fat snap is never affected.
+	// ACOnly keeps planned scans from starting on battery power; they wait
+	// until the machine is plugged in. A scan already running is allowed to
+	// finish when power is unplugged. Manual fat snap is never affected.
 	ACOnly bool `yaml:"ac_only" json:"ac_only"`
 }
 

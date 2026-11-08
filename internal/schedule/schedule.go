@@ -453,18 +453,21 @@ func buildTaskXML(t Task, kind scheduleKind) taskXML {
 		Settings: settings{
 			MultipleInstancesPolicy:    "IgnoreNew",
 			DisallowStartIfOnBatteries: t.ACOnly,
-			StopIfGoingOnBatteries:     t.ACOnly,
-			AllowHardTerminate:         true,
-			StartWhenAvailable:         true,
-			RunOnlyIfNetworkAvailable:  false,
-			IdleSettings:               idleSettings{StopOnIdleEnd: false, RestartOnIdle: false},
-			AllowStartOnDemand:         true,
-			Enabled:                    true,
-			Hidden:                     true,
-			RunOnlyIfIdle:              false,
-			WakeToRun:                  false,
-			ExecutionTimeLimit:         "PT6H",
-			Priority:                   7,
+			// Keep an in-flight scan alive when the machine switches to battery;
+			// otherwise Task Scheduler kills it mid-run and leaves a partial
+			// snapshot. AC-only still prevents new planned runs on battery.
+			StopIfGoingOnBatteries:    false,
+			AllowHardTerminate:        true,
+			StartWhenAvailable:        true,
+			RunOnlyIfNetworkAvailable: false,
+			IdleSettings:              idleSettings{StopOnIdleEnd: false, RestartOnIdle: false},
+			AllowStartOnDemand:        true,
+			Enabled:                   true,
+			Hidden:                    true,
+			RunOnlyIfIdle:             false,
+			WakeToRun:                 false,
+			ExecutionTimeLimit:        "PT6H",
+			Priority:                  7,
 		},
 		Actions: actions{Context: "Author", Exec: execAction{
 			Command:          t.Command,
