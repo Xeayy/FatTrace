@@ -1,6 +1,6 @@
 # FatTrace 项目交接文档
 
-- 更新时间：2026-11-08
+- 更新时间：2026-11-11
 - 状态：**v1.0.1 已发布**（2026-11-10，采集健康告警；发布说明 `docs/release-v1.0.1.md`）。**v1.0.0 已发布**（2026-11-08，首个正式版本；发布说明 `docs/release-v1.0.0.md`）。**M0–M7b 已完成并推送**（M7 `2882f39`，M7b `5dd8bd6`）；**M8a 非侵入式加固已完成代码、测试与文档，并已推送 master**（`e461de4`，CI 修复 `47365f0`，CI 稳定化 `81273c4`，最终文档 `3d5f09c`）；GitHub Actions `windows-latest` 最终 run `41032487559` 全绿。**2026-11-05 可用性优化与 75 条规则已推送（`ba0fc8c`）**。真实采集已连续到 **2026-11-10（快照 #25 daily：487,750 文件 / 67,538 目录 / 193.80 GiB / 覆盖率 99.38% / 3 个错误；#24 于 11-09 中断后自动补跑）**；原 69 条规则下 `#10→#19`（6.4 天）解释率 **60.01%**，**未达 70% 门禁**；按用户选择保留原记录并补规则后，同一数据重算 **88.07%**（17.78/20.18 GiB，详见下文与 `docs/m8a-results.md`）。**2026-11-02 用户决定简化收尾：取消 M8b（安装器/ACL/提权任务/签名），11-05 用真实数据复核解释率作为唯一前置时间门禁；首份周报、首次文件行清理、14 天无人值守和 4 周 dogfood 改为发布后观察，不阻塞 v1.0。** 首份真实周报已于 2026-11-08 生成；计划任务已重装为电池上不启动、已开始的扫描不终止，doctor 任务检查 healthy。
 - M8a 详情：`docs/m8a-results.md`。已加 doctor 自检、Host/Origin 校验、告警倍数阈值、导出泄露提示、AC-only 调度选项、README/SECURITY/CI/发布脚本；计划任务已于 2026-11-08 重装为 `LeastPrivilege + InteractiveToken + AC-only`。
 - 2026-11-02 全面修复：维护任务等锁、单快照日事件清理、报告“其他目录”虚增三处已修复并有回归测试；真实库已补跑 #15 weekly。已提交推送（`41b4f6b`）。
@@ -18,7 +18,15 @@
 - 托盘：tooltip 与右键菜单显示健康状态；启动时若为 danger 弹出通知。
 - 真实库验证：`/api/health` 返回 `D:\ ok failures=0 lastComplete=#25 lastFailure=#24 failed`，失败原因为“进程在完成前退出或被系统终止，未写入文件记录”；状态页截图确认面板正常。
 - 发布：tag `v1.0.1`，产物 `fat-1.0.1-windows-amd64.exe`、`arm64.exe` 与 `SHA256SUMS.txt`；发布说明 `docs/release-v1.0.1.md`。
-- 后续提醒（v1.0.2+，不阻塞）：卷级差额说明（区分 VSS/受保护区域）；GUI 启动器 + 正式图标；未解释项浏览器/规则助手。
+- 后续提醒（v1.0.2+，不阻塞）：GUI 启动器 + 正式图标；未解释项浏览器/规则助手。
+
+### 2026-11-11 卷级差额归因（已完成，未发布）
+
+- `model.VolumeCheck` 新增 `residual_alloc`、`unscanned_delta_alloc`、`unexplained_alloc` 与 `cause`；`internal/diff` 用两次快照的“扫描不可见字节”（`volume_used − unique_alloc_bytes`）变化归因，剩余差额才视为需排查。
+- 三端展示：`fat diff` 终端输出差额/不可见 Δ/未解释三行；周报与 SPA 两周对比按 cause 显示“不可见区域可解释 / 部分可解释 / 需排查”，并新增明细行；`/api/diff` 透出新字段。
+- 真实数据：`#19 → #20` 34.87% WARN，差额 +921.67 MiB 与不可见 Δ +921.67 MiB 一致、unexplained 0 B（invisible_area）；`#19 → #22`、`#22 → #25` 校验通过且差额与不可见 Δ 完全一致。门禁周 `#10 → #19` 文件行已被保留策略清理，按门禁记录与快照元数据复核：差额约 +1.09 GiB、不可见 Δ +1.094 GiB、unexplained≈0，7.35% WARN 属不可见区域可解释，原 60.01% 门禁失败记录不变。
+- 限制：归因是聚合估算，只能说明差额与不可见空间整体变化吻合，不能定位具体保护目录或 VSS；FatTrace 不使用 VSS、不提权枚举。
+- 验证：`gofmt` 无输出、`go vet ./...` 与 `go test ./... -count=1` 全绿；新增 `TestVolumeCheckAttribution`、`TestFormatBytesSigns`；周报 `report-19-20.html` 与 SPA `#/compare?to=20` 已用本机 Chrome 渲染核验。详细见 `docs/volume-gap-attribution.md`。
 
 ## 0. 项目一句话
 
@@ -36,7 +44,7 @@
 | Go 模块缓存 | `D:\FatTraceDemo\.cache\gomod` |
 | Go 构建缓存 | `D:\FatTraceDemo\.cache\gobuild` |
 | Go 代理 | `GOPROXY=https://goproxy.cn,direct`（已验证 200；proxy.golang.org 不可达，goproxy.io 超时） |
-| Git | `git init` 已提交并推送到私有仓库 `Xeayy/FatTrace`（分支 master；M0–M2 `06d6590`，M3 `1ed8b27`，M4 `9addaa5`，M5 `c0f0172`，M6 `6e03e7c`，M7 `2882f39`，M7b `5dd8bd6`，M8a `e461de4`，CI 修复 `47365f0`，CI 稳定化 `81273c4`，当前 HEAD `3d5f09c`） |
+| Git | `git init` 已提交并推送到私有仓库 `Xeayy/FatTrace`（分支 master；M0–M2 `06d6590`，M3 `1ed8b27`，M4 `9addaa5`，M5 `c0f0172`，M6 `6e03e7c`，M7 `2882f39`，M7b `5dd8bd6`，M8a `e461de4`，CI 修复 `47365f0`，CI 稳定化 `81273c4`，v1.0.0 `9f07600`，v1.0.1 `27fbbaa`，当前 HEAD `14baa83` = v1.0.1 + 文档提交；2026-11-11 卷级差额归因已实现，未发布） |
 | 其他 | Node 24、Python 3.14 可用；非管理员会话 |
 
 每次新终端先执行：
@@ -139,6 +147,7 @@ FatTrace/
   docs/m7-results.md            M7 实测记录（配置、日汇总 99.37%、告警、保留、计划任务）
   docs/m7b-results.md           M7b 实测记录（文件行降采样、自动周报、滚动日志、过期 diff 提示）
   docs/m8a-results.md           M8a 实测记录（doctor、Host/Origin、倍数告警、导出提示、AC-only、偏差）
+  docs/volume-gap-attribution.md 卷级差额归因口径、真实数据与限制（2026-11-11，未发布）
   README.md                     快速开始、命令表、配置、隐私、限制、排障
   SECURITY.md                   安全边界、敏感数据、漏洞报告
   .github/workflows/ci.yml      windows-latest: vet / test / build / doctor 冒烟

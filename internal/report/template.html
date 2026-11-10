@@ -273,7 +273,25 @@
   function volumeNote(c) {
     if (c.skipped) return "当前快照不适合做卷级校验（非卷根或缺少卷用量记录）。";
     if (c.ok) return "根目录增量与卷已用增量在容差内一致。";
-    return "根目录增量与卷已用增量不一致：受保护或排除目录的增量可能未被计入。";
+    if (c.cause === "invisible_area") {
+      return "差额由扫描不可见区域的变化解释（系统保护区/卷影副本/文件系统元数据），不是文件统计漏计。";
+    }
+    if (c.cause === "mixed") {
+      return "差额只有部分能由扫描不可见区域解释，剩余部分建议排查受保护目录或扫描遗漏。";
+    }
+    return "差额无法由扫描不可见区域解释：可能存在文件级统计遗漏或受保护目录变化，建议排查。";
+  }
+  function volumeCauseLabel(c) {
+    if (c.skipped) return "已跳过";
+    if (c.ok) return "通过";
+    if (c.cause === "invisible_area") return "不可见区域可解释";
+    if (c.cause === "mixed") return "部分可解释";
+    return "需排查";
+  }
+  function volumeGapNote(c) {
+    return "差额 " + signedBytes(c.residual_alloc || 0) +
+      " · 不可见区域 Δ " + signedBytes(c.unscanned_delta_alloc || 0) +
+      " · 未解释 " + signedBytes(c.unexplained_alloc || 0);
   }
   if (to.coverage_pct > 0 && to.coverage_pct < 95) {
     banner("warn", "覆盖率 " + fmtPct(to.coverage_pct), "低于 95%：受保护或不可读目录未计入，实际增量可能更高。");
@@ -281,8 +299,10 @@
   if (check.skipped) {
     banner("info", "卷级校验已跳过", volumeNote(check));
   } else if (!check.ok) {
-    banner("danger", "卷级校验未通过 · 偏差 " + fmtPct(check.diff_pct),
-      volumeNote(check) + "（根 Δ " + signedBytes(check.root_delta_alloc) + "，卷 Δ " + signedBytes(check.disk_delta_alloc) + "）");
+    banner(check.cause === "invisible_area" ? "warn" : "danger",
+      "卷级校验未通过 · 偏差 " + fmtPct(check.diff_pct),
+      volumeNote(check) + "（根 Δ " + signedBytes(check.root_delta_alloc) + "，卷 Δ " +
+      signedBytes(check.disk_delta_alloc) + "；" + volumeGapNote(check) + "）");
   }
   if (D.warnings && D.warnings.length) {
     banner("warn", "数据质量警告 " + D.warnings.length + " 条", "详见“校验与警告”。");
@@ -316,8 +336,9 @@
     kpi("卷级校验", "SKIPPED", volumeNote(check), "zero");
   } else {
     kpi("卷级校验", check.ok ? "OK" : "WARN",
-      "偏差 " + fmtPct(check.diff_pct) + " · 根 Δ " + signedBytes(check.root_delta_alloc),
-      check.ok ? "ok" : "danger");
+      "偏差 " + fmtPct(check.diff_pct) + " · " + volumeCauseLabel(check) +
+      " · 根 Δ " + signedBytes(check.root_delta_alloc),
+      check.ok ? "ok" : (check.cause === "invisible_area" ? "warn" : "danger"));
   }
   kpi("覆盖率", to.coverage_pct > 0 ? fmtPct(to.coverage_pct) : "—",
     check.unknown_dirs_after > 0 ? check.unknown_dirs_after + " 个目录不可读" : "无不可读目录",
@@ -718,6 +739,12 @@
   } else {
     checkRow("卷用量 Δ（实占）", signedBytes(check.disk_delta_alloc));
     checkRow("偏差", fmtPct(check.diff_pct), check.ok ? "ok" : "danger");
+    checkRow("差额（卷 Δ − 根 Δ）", signedBytes(check.residual_alloc || 0));
+    checkRow("扫描不可见区域 Δ", signedBytes(check.unscanned_delta_alloc || 0),
+      (check.unscanned_delta_alloc || 0) !== 0 ? "dim" : "");
+    checkRow("差额中未解释", signedBytes(check.unexplained_alloc || 0),
+      (check.unexplained_alloc || 0) !== 0 ? "danger" : "ok");
+    checkRow("结论", volumeCauseLabel(check) + " · " + volumeNote(check));
   }
   checkRow("不可读目录", fmtCount(check.unknown_dirs_after) + " 个（unknown 向祖先传播）");
   checkRow("覆盖率", to.coverage_pct > 0 ? fmtPct(to.coverage_pct) : "—");
