@@ -583,8 +583,9 @@ function kpiRow(totals, from, to, check, ex) {
     add("卷级校验", "SKIPPED", volumeNote(check), "zero");
   } else {
     add("卷级校验", check.ok ? "OK" : "WARN",
-      "偏差 " + fmtPct(check.diff_pct) + " · 根 Δ " + signedBytes(check.root_delta_alloc),
-      check.ok ? "ok" : "danger");
+      "偏差 " + fmtPct(check.diff_pct) + " · " + volumeCauseLabel(check) +
+      " · 根 Δ " + signedBytes(check.root_delta_alloc),
+      check.ok ? "ok" : (check.cause === "invisible_area" ? "warn" : "danger"));
   }
   add("覆盖率", to.coverage_pct > 0 ? fmtPct(to.coverage_pct) : "—",
     check.unknown_dirs_after > 0 ? check.unknown_dirs_after + " 个目录不可读" : "无不可读目录",
@@ -601,7 +602,27 @@ function kpiRow(totals, from, to, check, ex) {
 function volumeNote(check) {
   if (check.skipped) return "当前快照不适合做卷级校验（非卷根或缺少卷用量记录）。";
   if (check.ok) return "根目录增量与卷已用增量在容差内一致。";
-  return "根目录增量与卷已用增量不一致：受保护或排除目录的增量可能未被计入。";
+  if (check.cause === "invisible_area") {
+    return "差额由扫描不可见区域的变化解释（系统保护区/卷影副本/文件系统元数据），不是文件统计漏计。";
+  }
+  if (check.cause === "mixed") {
+    return "差额只有部分能由扫描不可见区域解释，剩余部分建议排查受保护目录或扫描遗漏。";
+  }
+  return "差额无法由扫描不可见区域解释：可能存在文件级统计遗漏或受保护目录变化，建议排查。";
+}
+
+function volumeCauseLabel(check) {
+  if (check.skipped) return "已跳过";
+  if (check.ok) return "通过";
+  if (check.cause === "invisible_area") return "不可见区域可解释";
+  if (check.cause === "mixed") return "部分可解释";
+  return "需排查";
+}
+
+function volumeGapNote(check) {
+  return "差额 " + signedBytes(check.residual_alloc || 0) +
+    " · 不可见区域 Δ " + signedBytes(check.unscanned_delta_alloc || 0) +
+    " · 未解释 " + signedBytes(check.unexplained_alloc || 0);
 }
 
 function diffBanners(D) {
@@ -614,9 +635,10 @@ function diffBanners(D) {
   if (check.skipped) {
     addBanner("info", "卷级校验已跳过", volumeNote(check));
   } else if (!check.ok) {
-    addBanner("danger", "卷级校验未通过 · 偏差 " + fmtPct(check.diff_pct),
+    addBanner(check.cause === "invisible_area" ? "warn" : "danger",
+      "卷级校验未通过 · 偏差 " + fmtPct(check.diff_pct),
       volumeNote(check) + "（根 Δ " + signedBytes(check.root_delta_alloc) +
-      "，卷 Δ " + signedBytes(check.disk_delta_alloc) + "）");
+      "，卷 Δ " + signedBytes(check.disk_delta_alloc) + "；" + volumeGapNote(check) + "）");
   }
   if (D.warnings && D.warnings.length) {
     addBanner("warn", "数据质量警告 " + D.warnings.length + " 条", "详见下方“校验与警告”。");
@@ -699,10 +721,16 @@ function checkPanel(D) {
     ["根目录实占 Δ", signedBytes(check.root_delta_alloc)],
     ["卷用量 Δ", check.skipped ? "—" : signedBytes(check.disk_delta_alloc)],
     ["偏差", check.skipped ? "—" : fmtPct(check.diff_pct)],
-    ["不可读目录（to）", fmtCount(check.unknown_dirs_after)],
-    ["结论", check.skipped ? "已跳过" : (check.ok ? "通过" : "未通过")],
-  ].map(([k, v]) => [td(k, "dim"), td(v)]);
-  p.appendChild(dataTable([{ label: "项目" }, { label: "值" }], rows));
+  ];
+  if (!check.skipped) {
+    rows.push(["差额（卷 Δ − 根 Δ）", signedBytes(check.residual_alloc || 0)]);
+    rows.push(["扫描不可见区域 Δ", signedBytes(check.unscanned_delta_alloc || 0)]);
+    rows.push(["差额中未解释", signedBytes(check.unexplained_alloc || 0)]);
+  }
+  rows.push(["不可读目录（to）", fmtCount(check.unknown_dirs_after)]);
+  rows.push(["结论", check.skipped ? "已跳过" : volumeCauseLabel(check)]);
+  p.appendChild(dataTable([{ label: "项目" }, { label: "值" }],
+    rows.map(([k, v]) => [td(k, "dim"), td(v)])));
   if (check.message) {
     const note = el("div", "notice", volumeNote(check));
     note.title = check.message;
@@ -1373,7 +1401,7 @@ async function viewRules(root) {
     "partial / failed 只写快照元数据与错误，不替换基线；深度受限的扫描也不替换。",
     "默认配对：最新 complete 卷根 + 同卷同根的上一个 complete。",
   ]);
-  section("卷级校验", "|根 Δ − 卷 Δ| / max(|卷 Δ|, 1% × 已用) < 2% 记为通过；非卷根或缺卷用量时跳过，不算失败。");
+  section("卷级校验", "|根 Δ − 卷 Δ| / max(|卷 Δ|, 1% × 已用) < 2% 记为通过；不通过时用两次快照的“扫描不可见区域”（卷已用 − 扫描可见实占）变化归因，剩余差额才视为需排查；非卷根或缺卷用量时跳过，不算失败。");
   section("保留与告警", null, [
     "保留只作用于 FatTrace 自己的数据库历史，从不触碰被扫描的文件。",
     "每个卷根始终保留最新一次快照；手动快照与运行中的快照不会被清理。fat prune 默认 dry-run，仅 --apply 才删除。",

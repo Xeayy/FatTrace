@@ -148,6 +148,17 @@ type DiffTotals struct {
 	DeltaAlloc   int64 `json:"delta_alloc"`
 }
 
+// Volume check causes. A residual gap is attributed to space the scan cannot
+// see (protected system data, shadow copies, NTFS metadata) using the change in
+// (volume used - scanned unique allocation); whatever remains is unexplained.
+const (
+	VolumeCauseWithinTolerance = "within_tolerance"
+	VolumeCauseInvisibleArea   = "invisible_area"
+	VolumeCauseMixed           = "mixed"
+	VolumeCauseFileLevel       = "file_level"
+	VolumeCauseSkipped         = "skipped"
+)
+
 // VolumeCheck compares the root directory delta with the volume-used delta
 // recorded by the two scans. Percentages outside tolerance indicate blind spots
 // (protected directories, unincluded roots, non-file-system usage).
@@ -158,7 +169,14 @@ type VolumeCheck struct {
 	OK             bool    `json:"ok"`
 	Skipped        bool    `json:"skipped,omitempty"`
 	UnknownDirs    int64   `json:"unknown_dirs_after"`
-	Message        string  `json:"message,omitempty"`
+	// ResidualAlloc is volume delta minus root delta; UnscannedDeltaAlloc is
+	// the change of (volume used - scanned unique allocation); UnexplainedAlloc
+	// is what the scan-invisible change does not account for.
+	ResidualAlloc       int64  `json:"residual_alloc"`
+	UnscannedDeltaAlloc int64  `json:"unscanned_delta_alloc"`
+	UnexplainedAlloc    int64  `json:"unexplained_alloc"`
+	Cause               string `json:"cause,omitempty"`
+	Message             string `json:"message,omitempty"`
 }
 
 // SnapshotRef is the subset of a snapshot row needed to describe a diff side.

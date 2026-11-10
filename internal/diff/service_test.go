@@ -289,19 +289,31 @@ func itoa64(v int64) string {
 }
 
 func TestVolumeCheckTolerance(t *testing.T) {
-	from := store.SnapshotInfo{ID: 1, Status: "complete", Root: `D:\`, VolumeUsed: 100_000}
-	to := store.SnapshotInfo{ID: 2, Status: "complete", Root: `D:\`, VolumeUsed: 110_000}
+	from := store.SnapshotInfo{
+		ID: 1, Status: "complete", Root: `D:\`,
+		VolumeUsed: 100_000, UniqueAllocBytes: 100_000,
+	}
+	to := store.SnapshotInfo{
+		ID: 2, Status: "complete", Root: `D:\`,
+		VolumeUsed: 110_000, UniqueAllocBytes: 110_000,
+	}
 
 	mismatch := model.DiffResult{Check: model.VolumeCheck{RootDeltaAlloc: 1_000}}
 	applyVolumeCheck(&mismatch, from, to, nil)
 	if mismatch.Check.OK || mismatch.Check.DiskDeltaAlloc != 10_000 || mismatch.Check.Skipped {
 		t.Fatalf("mismatch check = %+v", mismatch.Check)
 	}
+	if mismatch.Check.Cause != model.VolumeCauseFileLevel {
+		t.Fatalf("mismatch cause = %q", mismatch.Check.Cause)
+	}
 
 	agree := model.DiffResult{Check: model.VolumeCheck{RootDeltaAlloc: 10_000}}
 	applyVolumeCheck(&agree, from, to, nil)
 	if !agree.Check.OK || agree.Check.DiffPct != 0 {
 		t.Fatalf("agree check = %+v", agree.Check)
+	}
+	if agree.Check.Cause != model.VolumeCauseWithinTolerance {
+		t.Fatalf("agree cause = %q", agree.Check.Cause)
 	}
 
 	subdir := model.DiffResult{}
@@ -311,6 +323,9 @@ func TestVolumeCheckTolerance(t *testing.T) {
 	if !subdir.Check.Skipped || !subdir.Check.OK {
 		t.Fatalf("subdir check = %+v", subdir.Check)
 	}
+	if subdir.Check.Cause != model.VolumeCauseSkipped {
+		t.Fatalf("subdir cause = %q", subdir.Check.Cause)
+	}
 
 	noUsage := model.DiffResult{}
 	applyVolumeCheck(&noUsage, from, store.SnapshotInfo{
@@ -318,5 +333,77 @@ func TestVolumeCheckTolerance(t *testing.T) {
 	}, nil)
 	if !noUsage.Check.Skipped {
 		t.Fatalf("missing usage check = %+v", noUsage.Check)
+	}
+	if noUsage.Check.Cause != model.VolumeCauseSkipped {
+		t.Fatalf("missing usage cause = %q", noUsage.Check.Cause)
+	}
+}
+
+func TestVolumeCheckAttribution(t *testing.T) {
+	cases := []struct {
+		name       string
+		from, to   store.SnapshotInfo
+		rootDelta  int64
+		wantCause  string
+		wantOK     bool
+		wantResid  int64
+		wantUnscan int64
+		wantUnexpl int64
+	}{
+		{
+			name:       "invisible area explains the gap",
+			from:       store.SnapshotInfo{ID: 1, Root: `D:\`, VolumeUsed: 1_000_000, UniqueAllocBytes: 990_000},
+			to:         store.SnapshotInfo{ID: 2, Root: `D:\`, VolumeUsed: 1_110_000, UniqueAllocBytes: 1_090_000},
+			rootDelta:  100_000,
+			wantCause:  model.VolumeCauseInvisibleArea,
+			wantResid:  10_000,
+			wantUnscan: 10_000,
+			wantUnexpl: 0,
+		},
+		{
+			name:       "invisible area only partly explains the gap",
+			from:       store.SnapshotInfo{ID: 1, Root: `D:\`, VolumeUsed: 1_000_000, UniqueAllocBytes: 1_000_000},
+			to:         store.SnapshotInfo{ID: 2, Root: `D:\`, VolumeUsed: 1_100_000, UniqueAllocBytes: 1_070_000},
+			rootDelta:  60_000,
+			wantCause:  model.VolumeCauseMixed,
+			wantResid:  40_000,
+			wantUnscan: 30_000,
+			wantUnexpl: 10_000,
+		},
+		{
+			name:       "gap is not explained by invisible area",
+			from:       store.SnapshotInfo{ID: 1, Root: `D:\`, VolumeUsed: 1_000_000, UniqueAllocBytes: 1_000_000},
+			to:         store.SnapshotInfo{ID: 2, Root: `D:\`, VolumeUsed: 1_100_000, UniqueAllocBytes: 1_100_000},
+			rootDelta:  80_000,
+			wantCause:  model.VolumeCauseFileLevel,
+			wantResid:  20_000,
+			wantUnscan: 0,
+			wantUnexpl: 20_000,
+		},
+		{
+			name:       "within tolerance is not attributed",
+			from:       store.SnapshotInfo{ID: 1, Root: `D:\`, VolumeUsed: 1_000_000, UniqueAllocBytes: 990_000},
+			to:         store.SnapshotInfo{ID: 2, Root: `D:\`, VolumeUsed: 1_010_000, UniqueAllocBytes: 1_000_000},
+			rootDelta:  10_000,
+			wantOK:     true,
+			wantCause:  model.VolumeCauseWithinTolerance,
+			wantResid:  0,
+			wantUnscan: 0,
+			wantUnexpl: 0,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := model.DiffResult{Check: model.VolumeCheck{RootDeltaAlloc: tc.rootDelta}}
+			applyVolumeCheck(&res, tc.from, tc.to, nil)
+			if res.Check.OK != tc.wantOK || res.Check.Cause != tc.wantCause {
+				t.Fatalf("check = %+v", res.Check)
+			}
+			if res.Check.ResidualAlloc != tc.wantResid ||
+				res.Check.UnscannedDeltaAlloc != tc.wantUnscan ||
+				res.Check.UnexplainedAlloc != tc.wantUnexpl {
+				t.Fatalf("attribution = %+v", res.Check)
+			}
+		})
 	}
 }

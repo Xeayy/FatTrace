@@ -25,6 +25,7 @@ FatTrace 是一个面向 Windows 10/11 + NTFS 的本地磁盘增长追踪工具�
 - Windows 计划任务：每日/每周扫描、错过后补跑、可仅交流电运行。
 - 首次运行引导（`fat setup`）与托盘启动器（`fat tray`）：托盘右键可打开面板、立即扫描、查看下次运行、退出。
 - 采集健康告警：连续失败、上次失败原因与数据过期（`alerts.stale_hours`，默认 36 小时）在 `fat doctor`、托盘和 Web 状态页同时提示。
+- 卷级差额归因：校验不通过时区分扫描不可见区域（系统保护区/卷影副本/文件系统元数据）与真实文件统计差额。
 - `fat doctor` 自检：配置、数据库完整性、快照新鲜度、覆盖率、规则、存储空间、计划任务。
 
 ## 环境要求
@@ -129,7 +130,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.0.1
 
 ## 已知限制
 
-- 非管理员运行时，`System Volume Information` 等受保护目录不可读，覆盖率通常低于 100%。
+- 非管理员运行时，`System Volume Information` 等受保护目录不可读，覆盖率通常低于 100%。卷级差额归因只能整体估算这部分不可见空间，无法指出具体目录（不使用 VSS、不提权枚举）。
 - 枚举期间发生变化的文件可能造成少量瞬时误差；不是块级快照。
 - 不支持 FAT/exFAT/ReFS、网络共享、跨卷硬链接和文件内容分析。
 - 不是实时监控，也不是杀毒/勒索软件防护工具；只按计划给出增长线索。
@@ -148,6 +149,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.0.1
 
 - 任务显示 `not AC-only`：安装的是旧定义，确认后执行 `fat schedule install --force`。
 - 报告提示 `file rows pruned`：该快照的文件明细已按保留策略删除，目录聚合仍可用于浏览。
+- 卷级校验 WARN：先看报告或面板里的“差额中未解释”；接近 0 B 表示差额由扫描不可见区域解释，通常无需排查。
 - 覆盖率低：尝试管理员运行一次手动快照，或接受受保护目录的缺口。
 
 ## 开发与测试

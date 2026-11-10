@@ -185,6 +185,11 @@ func snapshotRef(sn store.SnapshotInfo) model.SnapshotRef {
 // applyVolumeCheck compares the root directory delta with the volume-used delta
 // recorded by the two scans. The tolerance base is floored at 1% of used space
 // so ordinary metadata churn on a quiet week does not trip the check.
+//
+// A gap is attributed with the change of (volume used - scanned unique
+// allocation): that space is invisible to the scan (protected system data,
+// shadow copies, NTFS metadata). Only the part this does not explain is left
+// for file-level investigation.
 func applyVolumeCheck(res *model.DiffResult, from, to store.SnapshotInfo, toDirs []model.SnapshotDir) {
 	for _, d := range toDirs {
 		if d.Unknown {
@@ -194,12 +199,14 @@ func applyVolumeCheck(res *model.DiffResult, from, to store.SnapshotInfo, toDirs
 	if !model.IsVolumeRoot(to.Root) {
 		res.Check.OK = true
 		res.Check.Skipped = true
+		res.Check.Cause = model.VolumeCauseSkipped
 		res.Check.Message = "snapshot root is not a volume root"
 		return
 	}
 	if from.VolumeUsed <= 0 || to.VolumeUsed <= 0 {
 		res.Check.OK = true
 		res.Check.Skipped = true
+		res.Check.Cause = model.VolumeCauseSkipped
 		res.Check.Message = "volume usage was not recorded"
 		return
 	}
@@ -212,11 +219,43 @@ func applyVolumeCheck(res *model.DiffResult, from, to store.SnapshotInfo, toDirs
 	}
 	res.Check.DiffPct = math.Round(pct*100) / 100
 	res.Check.OK = pct < 2.0
-	if res.Check.OK {
+
+	unscannedFrom := from.VolumeUsed - from.UniqueAllocBytes
+	unscannedTo := to.VolumeUsed - to.UniqueAllocBytes
+	unscannedDelta := unscannedTo - unscannedFrom
+	residual := diskDelta - res.Check.RootDeltaAlloc
+	unexplained := residual - unscannedDelta
+	tolerance := int64(denom * 0.02)
+
+	res.Check.ResidualAlloc = residual
+	res.Check.UnscannedDeltaAlloc = unscannedDelta
+	res.Check.UnexplainedAlloc = unexplained
+
+	switch {
+	case res.Check.OK:
+		res.Check.Cause = model.VolumeCauseWithinTolerance
 		res.Check.Message = "root delta agrees with volume-used delta within tolerance"
-	} else {
-		res.Check.Message = "root delta differs from volume-used delta; deltas may miss protected or excluded data"
+	case absInt64(unexplained) <= tolerance:
+		res.Check.Cause = model.VolumeCauseInvisibleArea
+		res.Check.Message = "volume delta is explained by scan-invisible space (protected system data, shadow copies or NTFS metadata); file rows are not missing"
+	case sameSign(residual, unscannedDelta) && absInt64(unscannedDelta)*4 >= absInt64(residual):
+		res.Check.Cause = model.VolumeCauseMixed
+		res.Check.Message = "volume delta is only partly explained by scan-invisible space; the rest suggests missing or unreadable file data"
+	default:
+		res.Check.Cause = model.VolumeCauseFileLevel
+		res.Check.Message = "volume delta is not explained by scan-invisible space; file rows may be missing or protected data changed"
 	}
+}
+
+func absInt64(v int64) int64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+func sameSign(a, b int64) bool {
+	return (a > 0 && b > 0) || (a < 0 && b < 0)
 }
 
 func appendCoverageWarnings(res *model.DiffResult, from, to store.SnapshotInfo) {

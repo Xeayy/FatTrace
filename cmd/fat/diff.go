@@ -122,9 +122,10 @@ func printDiff(r model.DiffResult) {
 		fmt.Printf("  root Δ %s vs volume Δ %s  (%.2f%%)  %s\n",
 			signedBytes(r.Check.RootDeltaAlloc), signedBytes(r.Check.DiskDeltaAlloc),
 			r.Check.DiffPct, status)
-		if !r.Check.OK {
-			fmt.Printf("  %s\n", r.Check.Message)
-		}
+		fmt.Printf("  residual Δ %s = volume − root · scan-invisible Δ %s · unexplained %s\n",
+			signedBytes(r.Check.ResidualAlloc), signedBytes(r.Check.UnscannedDeltaAlloc),
+			signedBytes(r.Check.UnexplainedAlloc))
+		fmt.Printf("  cause: %s — %s\n", r.Check.Cause, r.Check.Message)
 	}
 	if r.Check.UnknownDirs > 0 {
 		fmt.Printf("  unknown dirs after snapshot: %d (unknown propagates to ancestors)\n", r.Check.UnknownDirs)

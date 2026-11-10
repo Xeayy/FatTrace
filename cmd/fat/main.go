@@ -304,13 +304,18 @@ func printStats(s model.ScanStats) {
 
 func formatBytes(n int64) string {
 	const unit = 1024
+	sign := ""
+	if n < 0 {
+		sign = "-"
+		n = -n
+	}
 	if n < unit {
-		return fmt.Sprintf("%d B", n)
+		return fmt.Sprintf("%s%d B", sign, n)
 	}
 	div, exp := int64(unit), 0
 	for n2 := n / unit; n2 >= unit; n2 /= unit {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.2f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+	return fmt.Sprintf("%s%.2f %ciB", sign, float64(n)/float64(div), "KMGTPE"[exp])
 }
