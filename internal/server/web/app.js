@@ -1384,11 +1384,36 @@ async function viewRules(root) {
   root.appendChild(policy);
 }
 
+function healthPanel(rep) {
+  const p = panel("采集健康", "最近完整快照、失败次数与数据新鲜度");
+  const rows = (rep.roots || []).map((h) => [
+    td(h.root, "path"),
+    td(h.level === "danger" ? "异常" : h.level === "warn" ? "注意" : "正常", h.level),
+    td(h.last_complete ? "#" + h.last_complete.id + " · " + fmtDate(h.last_complete.started_at_ms) : "—"),
+    td(h.last_failure ? "#" + h.last_failure.id + " " + h.last_failure.status +
+      (h.last_failure_reason ? " · " + h.last_failure_reason : "") : "—"),
+    td(h.consecutive_failures || 0, h.consecutive_failures ? "danger num" : "num"),
+    td(h.reason || h.summary || "—"),
+  ]);
+  p.appendChild(dataTable(
+    [{ label: "根" }, { label: "状态" }, { label: "最近完整" }, { label: "上次失败" }, { label: "连续失败", num: true }, { label: "说明" }],
+    rows));
+  return p;
+}
+
 async function viewStatus(root) {
-  const [st, alertRep] = await Promise.all([
+  const [st, alertRep, healthRep] = await Promise.all([
     api("status"),
     api("alerts").catch((err) => ({ alerts: [], error: err.message })),
+    api("health").catch((err) => ({ roots: [], level: "danger", error: err.message })),
   ]);
+  if (healthRep.error) {
+    const ph = panel("采集健康");
+    ph.appendChild(el("div", "empty", "健康状态读取失败：" + healthRep.error));
+    root.appendChild(ph);
+  } else {
+    root.appendChild(healthPanel(healthRep));
+  }
   const grid = el("div", "status-grid");
 
   const pd = panel("数据库");
@@ -1479,6 +1504,20 @@ function errorBox(err) {
 
 let renderSeq = 0;
 
+async function checkHealthBanner(seq) {
+  let rep;
+  try {
+    rep = await api("health");
+  } catch {
+    return;
+  }
+  if (seq !== renderSeq || !rep || rep.level === "ok") return;
+  const bad = (rep.roots || []).filter((r) => r.level !== "ok");
+  const detail = bad.map((r) => r.root + "：" + (r.reason || r.summary)).join("；");
+  addBanner(rep.level === "danger" ? "danger" : "warn",
+    rep.level === "danger" ? "数据采集异常" : "数据采集注意", detail);
+}
+
 async function render() {
   const seq = ++renderSeq;
   redraws.length = 0;
@@ -1498,6 +1537,7 @@ async function render() {
     view.textContent = "";
     view.appendChild(frag);
     window.scrollTo(0, 0);
+    checkHealthBanner(seq);
   } catch (err) {
     if (seq !== renderSeq) return;
     view.textContent = "";

@@ -67,6 +67,9 @@ type Alerts struct {
 	// multiples; the day must also grow by at least this much.
 	GrowthMultipleFloorBytes int64   `yaml:"growth_multiple_floor_bytes" json:"growth_multiple_floor_bytes"`
 	SilenceHours             float64 `yaml:"silence_hours" json:"silence_hours"`
+	// StaleHours flags a volume whose newest complete snapshot is older than
+	// this. Zero disables the check at the call site; health falls back to 36.
+	StaleHours float64 `yaml:"stale_hours" json:"stale_hours"`
 }
 
 // Defaults returns the built-in configuration. Roots stay empty: scans are
@@ -94,6 +97,7 @@ func Defaults() Config {
 			GrowthMultiple:           0,
 			GrowthMultipleFloorBytes: 1 << 30,
 			SilenceHours:             24,
+			StaleHours:               36,
 		},
 	}
 }
@@ -312,5 +316,6 @@ func Template(roots []string) string {
 	b.WriteString("  growth_multiple: 0        # spike vs median of prior 14 days; 0 disables\n")
 	b.WriteString("  growth_multiple_floor_bytes: 1073741824  # ignore multiples below this growth\n")
 	b.WriteString("  silence_hours: 24         # suppress repeats for this long after firing\n")
+	b.WriteString("  stale_hours: 36           # warn when the newest complete snapshot is older\n")
 	return b.String()
 }
