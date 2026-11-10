@@ -17,6 +17,7 @@ import (
 	"fattrace/internal/alerts"
 	"fattrace/internal/config"
 	"fattrace/internal/daily"
+	"fattrace/internal/health"
 	"fattrace/internal/logfile"
 	"fattrace/internal/prune"
 	"fattrace/internal/report"
@@ -32,6 +33,7 @@ type maintainReport struct {
 	Snapshots []snap.Result  `json:"snapshots"`
 	Daily     daily.Report   `json:"daily"`
 	Alerts    alerts.Report  `json:"alerts"`
+	Health    health.Report  `json:"health"`
 	Reports   []reportResult `json:"reports,omitempty"`
 	Prune     *prune.Report  `json:"prune,omitempty"`
 	Errors    []string       `json:"errors,omitempty"`
@@ -161,6 +163,18 @@ func maintainCmd(args []string) {
 			}
 		}
 		logf("alerts checked=%d fired=%d", len(alertRep.Alerts), fired)
+	}
+
+	if snaps, err := st.ListSnapshots(ctx, 1000); err != nil {
+		logf("health error: %v", err)
+	} else {
+		hr := health.Evaluate(snaps, cfg.Schedule.Roots,
+			time.Duration(cfg.Alerts.StaleHours*float64(time.Hour)), time.Now())
+		rep.Health = hr
+		for _, hs := range hr.Roots {
+			logf("health %s level=%s failures=%d stale=%v reason=%s",
+				hs.Root, hs.Level, hs.ConsecutiveFailures, hs.Stale, hs.Reason)
+		}
 	}
 
 	if *kind == "weekly" {

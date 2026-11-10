@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"fattrace/internal/alerts"
 	"fattrace/internal/diff"
+	"fattrace/internal/health"
 	"fattrace/internal/model"
 	"fattrace/internal/rules"
 	"fattrace/internal/store"
@@ -137,6 +139,17 @@ func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	writeJSON(w, http.StatusOK, rep)
+}
+
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	snaps, err := s.st.ListSnapshots(r.Context(), 1000)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	rep := health.Evaluate(snaps, s.cfg.Schedule.Roots,
+		time.Duration(s.cfg.Alerts.StaleHours*float64(time.Hour)), time.Now())
 	writeJSON(w, http.StatusOK, rep)
 }
 

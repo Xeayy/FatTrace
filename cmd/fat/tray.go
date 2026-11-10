@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"fattrace/internal/config"
+	"fattrace/internal/health"
 	"fattrace/internal/schedule"
 	"fattrace/internal/tray"
 )
@@ -39,6 +40,9 @@ type trayApp struct {
 	scanning        bool
 	latest          string
 	next            string
+	healthLine      string
+	healthLevel     health.Level
+	healthReason    string
 	tasksKnown      bool
 	dailyInstalled  bool
 	weeklyInstalled bool
@@ -91,9 +95,10 @@ func trayCmd(args []string) {
 
 	app := &trayApp{
 		dbPath: path, local: local, cfg: cfg,
-		quit:   make(chan struct{}),
-		latest: "最近快照: 暂无",
-		next:   "下次: 读取中",
+		quit:       make(chan struct{}),
+		latest:     "最近快照: 暂无",
+		next:       "下次: 读取中",
+		healthLine: "健康: 读取中",
 	}
 	app.tr = tray.New(tray.Options{
 		Title:     "FatTrace",
@@ -117,9 +122,15 @@ func trayCmd(args []string) {
 
 	app.checkTasks()
 	app.refresh()
+	app.mu.Lock()
+	healthLevel, healthReason := app.healthLevel, app.healthReason
+	app.mu.Unlock()
+	if healthLevel == health.LevelDanger {
+		app.tr.Notify("数据采集异常", truncateText(healthReason, 180))
+	}
 	if *open {
 		app.openDashboard()
-	} else {
+	} else if healthLevel != health.LevelDanger {
 		app.tr.Notify("FatTrace 已启动", "双击托盘图标打开面板，右键查看更多操作。")
 	}
 
@@ -181,6 +192,7 @@ func (a *trayApp) menu() []tray.Item {
 	scanning := a.scanning
 	latest := a.latest
 	next := a.next
+	healthLine := a.healthLine
 	a.mu.Unlock()
 
 	scanLabel := "立即扫描"
@@ -192,6 +204,7 @@ func (a *trayApp) menu() []tray.Item {
 		{ID: trayScan, Label: scanLabel, Disabled: scanning},
 		{Separator: true},
 		{Label: latest, Disabled: true},
+		{Label: healthLine, Disabled: true},
 		{Label: next, Disabled: true},
 		{Separator: true},
 		{ID: trayDataDir, Label: "打开数据目录"},
@@ -247,13 +260,14 @@ func (a *trayApp) refresh() {
 	defer a.refreshMu.Unlock()
 
 	latest := "最近快照: 暂无"
+	healthLine := "健康: 读取失败"
+	level := health.LevelDanger
+	reason := "无法读取数据库"
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	st, err := a.local.st.Status(ctx)
+	snaps, err := a.local.st.ListSnapshots(ctx, 1000)
 	cancel()
-	if err != nil {
-		latest = "最近快照: 读取失败"
-	} else {
-		for _, sn := range st.RecentSnapshots {
+	if err == nil {
+		for _, sn := range snaps {
 			if sn.Status != "complete" {
 				continue
 			}
@@ -262,16 +276,42 @@ func (a *trayApp) refresh() {
 				formatBytes(sn.UniqueAllocBytes))
 			break
 		}
+		hr := health.Evaluate(snaps, a.cfg.Schedule.Roots,
+			time.Duration(a.cfg.Alerts.StaleHours*float64(time.Hour)), time.Now())
+		level = hr.Level
+		reason = ""
+		for _, hs := range hr.Roots {
+			if hs.Level == level {
+				reason = hs.Reason
+				if reason == "" {
+					reason = hs.Summary
+				}
+				break
+			}
+		}
+		switch level {
+		case health.LevelDanger:
+			healthLine = "健康: 异常"
+		case health.LevelWarn:
+			healthLine = "健康: 注意"
+		default:
+			healthLine = "健康: 正常"
+		}
+		if level != health.LevelOK && reason != "" {
+			healthLine += " · " + reason
+		}
 	}
 	next := a.nextRun()
 
 	a.mu.Lock()
-	a.latest, a.next = latest, next
+	a.latest, a.next, a.healthLine = latest, next, healthLine
+	a.healthLevel, a.healthReason = level, reason
 	scanning := a.scanning
 	a.mu.Unlock()
 	if !scanning {
 		a.tr.SetTooltip("FatTrace\n" +
-			strings.TrimPrefix(latest, "最近快照: ") + "\n" + next)
+			strings.TrimPrefix(latest, "最近快照: ") + "\n" +
+			truncateText(healthLine, 90) + "\n" + next)
 	}
 }
 

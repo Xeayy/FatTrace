@@ -106,7 +106,7 @@ func TestRunStaleAndExpired(t *testing.T) {
 	f := newFixture(t, 48*time.Hour, 5)
 	rep := Run(context.Background(), Options{DBPath: f.db, Now: f.now, SkipTasks: true})
 	snap := findCheck(t, rep, "snapshot "+f.root)
-	if snap.Level != LevelWarn {
+	if snap.Level != LevelFail {
 		t.Fatalf("stale snapshot level = %s (%s)", snap.Level, snap.Summary)
 	}
 	if !strings.Contains(snap.Summary, "days ago") || !strings.Contains(snap.Summary, "file rows pruned") {
@@ -114,6 +114,36 @@ func TestRunStaleAndExpired(t *testing.T) {
 	}
 	if !strings.Contains(snap.Hint, "fat maintain") {
 		t.Fatalf("stale hint = %q", snap.Hint)
+	}
+}
+
+func TestRunConsecutiveFailures(t *testing.T) {
+	f := newFixture(t, 2*time.Hour, 100)
+	raw, err := sql.Open("sqlite", f.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	for i, age := range []time.Duration{time.Hour, 30 * time.Minute} {
+		started := f.now.Add(-age)
+		if _, err := raw.Exec(`INSERT INTO snapshots
+			(volume_id, kind, status, root, started_at, finished_at, duration_ms,
+			 files, dirs, unique_alloc_bytes, volume_used, errors, coverage_pct)
+			VALUES ((SELECT id FROM volumes LIMIT 1), 'daily', 'failed', ?, ?, ?, 1000, 0, 0, 0, 0, 0, 0)`,
+			f.root, started.UnixMilli(), started.Add(time.Second).UnixMilli()); err != nil {
+			t.Fatalf("insert failure %d: %v", i, err)
+		}
+	}
+	rep := Run(context.Background(), Options{DBPath: f.db, Now: f.now, SkipTasks: true})
+	snap := findCheck(t, rep, "snapshot "+f.root)
+	if snap.Level != LevelFail {
+		t.Fatalf("consecutive failures level = %s (%s)", snap.Level, snap.Summary)
+	}
+	if !strings.Contains(snap.Summary, "连续失败 2 次") {
+		t.Fatalf("summary = %q", snap.Summary)
+	}
+	if !strings.Contains(snap.Hint, "进程在完成前退出") {
+		t.Fatalf("hint = %q", snap.Hint)
 	}
 }
 

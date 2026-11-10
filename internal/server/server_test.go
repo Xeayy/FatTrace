@@ -10,7 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"fattrace/internal/config"
 	"fattrace/internal/diff"
+	"fattrace/internal/health"
 	"fattrace/internal/model"
 	"fattrace/internal/store"
 )
@@ -182,6 +184,45 @@ func doGet(t *testing.T, f *testFixture, path, token string, out any) int {
 		}
 	}
 	return resp.StatusCode
+}
+
+func TestHealthEndpoint(t *testing.T) {
+	f := newFixture(t)
+	cfg := config.Defaults()
+	cfg.Schedule.Roots = []string{`D:\`}
+	if err := config.Save(filepath.Join(filepath.Dir(f.store.Path()), config.FileName), cfg); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(f.store, Options{Token: testToken})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/api/health", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set(tokenHeader, testToken)
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("health status = %d", resp.StatusCode)
+	}
+	var rep health.Report
+	if err := json.NewDecoder(resp.Body).Decode(&rep); err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Roots) != 1 || rep.Roots[0].Root != `D:\` {
+		t.Fatalf("health roots = %+v", rep.Roots)
+	}
+	if rep.Level != health.LevelWarn || rep.Roots[0].ConsecutiveFailures != 1 {
+		t.Fatalf("health = %+v", rep)
+	}
 }
 
 func TestAuthTokenRequired(t *testing.T) {

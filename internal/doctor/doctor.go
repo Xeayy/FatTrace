@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"fattrace/internal/config"
+	"fattrace/internal/health"
 	"fattrace/internal/model"
 	"fattrace/internal/rules"
 	"fattrace/internal/scan"
@@ -169,8 +170,19 @@ func Run(ctx context.Context, opts Options) Report {
 	} else if firstRun {
 		add("snapshots", LevelWarn, "no snapshots yet", "run fat snap or fat maintain")
 	}
+	staleAfter := time.Duration(cfg.Alerts.StaleHours * float64(time.Hour))
+	if staleAfter <= 0 {
+		staleAfter = 36 * time.Hour
+	}
+	healthByRoot := make(map[string]health.Status, len(cfg.Schedule.Roots))
+	if snapErr == nil {
+		hr := health.Evaluate(snapshots, cfg.Schedule.Roots, staleAfter, opts.Now)
+		for _, hs := range hr.Roots {
+			healthByRoot[hs.Root] = hs
+		}
+	}
 	for _, root := range cfg.Schedule.Roots {
-		checkRoot(ctx, st, add, root, opts.Now, snapshots, firstRun)
+		checkRoot(ctx, st, add, root, opts.Now, snapshots, firstRun, healthByRoot[root])
 	}
 
 	if set, err := rules.Load(opts.DBPath); err != nil {
@@ -208,7 +220,7 @@ func checkSpace(add func(string, Level, string, string), dbPath string, dbBytes 
 }
 
 func checkRoot(ctx context.Context, st *store.Store, add func(string, Level, string, string),
-	root string, now time.Time, all []store.SnapshotInfo, firstRun bool) {
+	root string, now time.Time, all []store.SnapshotInfo, firstRun bool, hs health.Status) {
 	name := "snapshot " + root
 	info, err := os.Stat(root)
 	if err != nil {
@@ -249,27 +261,44 @@ func checkRoot(ctx context.Context, st *store.Store, add func(string, Level, str
 		notes = append(notes, fmt.Sprintf("#%d %s", latest.ID, latest.Status))
 		hints = append(hints, "check logs/maintain.log and the scan error table")
 	}
+	if hs.ConsecutiveFailures > 0 {
+		if hs.ConsecutiveFailures >= 2 {
+			level = LevelFail
+		} else if level == LevelOK {
+			level = LevelWarn
+		}
+		notes = append(notes, fmt.Sprintf("连续失败 %d 次", hs.ConsecutiveFailures))
+		if hs.Reason != "" {
+			hints = append(hints, hs.Reason+"; check logs/maintain.log")
+		}
+	}
 	age := now.Sub(time.UnixMilli(complete.StartedAt))
 	if age < 0 {
 		age = 0
 	}
-	if age > 36*time.Hour {
-		level = LevelWarn
+	if hs.Stale {
+		level = LevelFail
 		notes = append(notes, fmt.Sprintf("last complete %.1f days ago", age.Hours()/24))
 		hints = append(hints, "run fat maintain or check the scheduled task")
 	}
 	if model.IsVolumeRoot(root) && complete.VolumeUsed > 0 && complete.CoveragePct < 95 {
-		level = LevelWarn
+		if level == LevelOK {
+			level = LevelWarn
+		}
 		notes = append(notes, fmt.Sprintf("coverage %.2f%%", complete.CoveragePct))
 		hints = append(hints, "protected directories are unreadable; an elevated scan may close the gap")
 	}
 	if complete.Errors > 0 {
-		level = LevelWarn
+		if level == LevelOK {
+			level = LevelWarn
+		}
 		hints = append(hints, "run fat report to inspect the error summary")
 	}
 	if complete.Files > 0 {
 		if n, err := st.CountSnapshotFiles(ctx, []int64{complete.ID}); err == nil && n == 0 {
-			level = LevelWarn
+			if level == LevelOK {
+				level = LevelWarn
+			}
 			notes = append(notes, "file rows pruned")
 			hints = append(hints, "file-level diff/browse is unavailable for this snapshot; directory aggregates remain")
 		}

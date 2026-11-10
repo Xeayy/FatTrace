@@ -124,6 +124,7 @@ func New(st *store.Store, opts Options) (*Server, error) {
 	s.mux.HandleFunc("GET /api/config", s.auth(s.handleConfig))
 	s.mux.HandleFunc("GET /api/daily", s.auth(s.handleDaily))
 	s.mux.HandleFunc("GET /api/alerts", s.auth(s.handleAlerts))
+	s.mux.HandleFunc("GET /api/health", s.auth(s.handleHealth))
 	s.mux.HandleFunc("GET /api/dir", s.auth(s.handleDir))
 	s.mux.HandleFunc("GET /api/trend", s.auth(s.handleTrend))
 	return s, nil
