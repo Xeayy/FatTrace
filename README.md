@@ -39,13 +39,13 @@ FatTrace 是一个面向 Windows 10/11 + NTFS 的本地磁盘增长追踪工具�
 ```powershell
 git clone <private-repo-url> FatTrace
 cd FatTrace
-go build -trimpath -ldflags "-s -w -X main.version=1.0.1" -o dist\fat.exe .\cmd\fat
+go build -trimpath -ldflags "-s -w -X main.version=1.0.2" -o dist\fat.exe .\cmd\fat
 ```
 
 或使用发布脚本生成 amd64/arm64 两个架构与 SHA256 校验文件：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.0.1
+powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.0.2
 ```
 
 产物位于 `dist/`（已被 `.gitignore` 忽略）。
