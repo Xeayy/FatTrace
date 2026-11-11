@@ -38,6 +38,7 @@
 - 正式图标暂缓（用户决定先不设计），当前用系统默认图标；图标管线（ImageGen→Pillow 多尺寸 ICO→windres .syso→tray 加载）留作后续。
 - 验证：全量测试绿；新增启动器参数测试；pecheck 通过；受控冒烟 `fatgui --open=false --db <真实库>` 隐藏拉起托盘进程后退出。详见 `docs/gui-launcher.md`。
 - 发布：tag `v1.1.0`；根 `fat.exe`/`fatgui.exe` 已更新为 1.1.0。发布说明 `docs/release-v1.1.0.md`。
+- 桌面 `FatTrace.lnk`（`D:\Demo\Desktop`）经用户确认已改指向 `fatgui.exe --db "…"`，图标用 fatgui 内嵌；计划任务/自启/注册表未动。
 
 ## 0. 项目一句话
 
@@ -55,7 +56,7 @@
 | Go 模块缓存 | `D:\FatTraceDemo\.cache\gomod` |
 | Go 构建缓存 | `D:\FatTraceDemo\.cache\gobuild` |
 | Go 代理 | `GOPROXY=https://goproxy.cn,direct`（已验证 200；proxy.golang.org 不可达，goproxy.io 超时） |
-| Git | `git init` 已提交并推送到私有仓库 `Xeayy/FatTrace`（分支 master；M0–M2 `06d6590`，M3 `1ed8b27`，M4 `9addaa5`，M5 `c0f0172`，M6 `6e03e7c`，M7 `2882f39`，M7b `5dd8bd6`，M8a `e461de4`，CI 修复 `47365f0`，CI 稳定化 `81273c4`，v1.0.0 `9f07600`，v1.0.1 `27fbbaa`，v1.0.2 `9237186`，当前 HEAD `9237186`） |
+| Git | `git init` 已提交并推送到私有仓库 `Xeayy/FatTrace`（分支 master；M0–M2 `06d6590`，M3 `1ed8b27`，M4 `9addaa5`，M5 `c0f0172`，M6 `6e03e7c`，M7 `2882f39`，M7b `5dd8bd6`，M8a `e461de4`，CI 修复 `47365f0`，CI 稳定化 `81273c4`，v1.0.0 `9f07600`，v1.0.1 `27fbbaa`，v1.0.2 `9237186`，v1.1.0 `ab27f0e`，当前 HEAD `ab27f0e`） |
 | 其他 | Node 24、Python 3.14 可用；非管理员会话 |
 
 每次新终端先执行：
