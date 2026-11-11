@@ -62,6 +62,9 @@ type Explanation struct {
 	Categories       []ExplainedCategory `json:"categories,omitempty"`
 	Unexplained      []UnexplainedItem   `json:"unexplained,omitempty"`
 	UnexplainedTotal int                 `json:"unexplained_total"`
+	// AllUnexplained retains a larger, size-sorted sample for the read-only
+	// unexplained browser. It is never serialized into reports or /api/diff.
+	AllUnexplained []UnexplainedItem `json:"-"`
 }
 
 // FileChange describes a single file-level difference. DeltaBytes/DeltaAlloc

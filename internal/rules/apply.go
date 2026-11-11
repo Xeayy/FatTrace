@@ -11,7 +11,13 @@ import (
 	"fattrace/internal/store"
 )
 
-const unexplainedLimit = 50
+const (
+	// unexplainedLimit is the public top-N shown in CLI/report/diff JSON.
+	unexplainedLimit = 50
+	// unexplainedStoreLimit bounds the larger sample kept in memory for the
+	// read-only unexplained browser; it never reaches reports or /api/diff.
+	unexplainedStoreLimit = 5000
+)
 
 // Diff runs the diff engine with rule explanation enabled. The observer sees
 // every file change, so the explanation rate covers all observed growth rather
@@ -60,7 +66,7 @@ func (a *aggregator) observe(c model.FileChange) {
 		}
 		a.total++
 		item := model.UnexplainedItem{Path: path, Kind: c.Kind, DeltaAlloc: c.DeltaAlloc}
-		if a.unexplained.Len() < unexplainedLimit {
+		if a.unexplained.Len() < unexplainedStoreLimit {
 			heap.Push(&a.unexplained, item)
 		} else if unexplainedBetter(item, a.unexplained[0]) {
 			a.unexplained[0] = item
@@ -90,14 +96,18 @@ func (a *aggregator) finalize(res *model.DiffResult) {
 		return cats[i].Label < cats[j].Label
 	})
 
-	unexplained := make([]model.UnexplainedItem, len(a.unexplained))
-	copy(unexplained, a.unexplained)
-	sort.Slice(unexplained, func(i, j int) bool {
-		if unexplained[i].DeltaAlloc != unexplained[j].DeltaAlloc {
-			return unexplained[i].DeltaAlloc > unexplained[j].DeltaAlloc
+	all := make([]model.UnexplainedItem, len(a.unexplained))
+	copy(all, a.unexplained)
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].DeltaAlloc != all[j].DeltaAlloc {
+			return all[i].DeltaAlloc > all[j].DeltaAlloc
 		}
-		return unexplained[i].Path < unexplained[j].Path
+		return all[i].Path < all[j].Path
 	})
+	unexplained := all
+	if len(unexplained) > unexplainedLimit {
+		unexplained = unexplained[:unexplainedLimit]
+	}
 
 	pct := 100.0
 	if a.growth > 0 {
@@ -113,6 +123,7 @@ func (a *aggregator) finalize(res *model.DiffResult) {
 		Categories:       cats,
 		Unexplained:      unexplained,
 		UnexplainedTotal: a.total,
+		AllUnexplained:   all,
 	}
 }
 

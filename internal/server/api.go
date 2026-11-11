@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"fattrace/internal/alerts"
@@ -44,31 +46,38 @@ func (s *Server) handleSnapshots(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
+	res, err := s.cachedDiff(r.Context(), r.URL.Query())
+	if err != nil {
+		writeDiffError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// cachedDiff resolves and caches a snapshot-pair diff. It is shared by the diff
+// endpoint and the unexplained/rule-preview browsers so they reuse one compute.
+func (s *Server) cachedDiff(ctx context.Context, q url.Values) (model.DiffResult, error) {
 	fromID, err := queryInt64(q, "from")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
+		return model.DiffResult{}, err
 	}
 	toID, err := queryInt64(q, "to")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
+		return model.DiffResult{}, err
 	}
 	topN, err := queryInt(q, "top", s.topN, 1, 500)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
+		return model.DiffResult{}, err
 	}
 	cross := q.Get("cross") == "1" || q.Get("cross") == "true"
 
-	latest := s.latestCompleteSnapshotID(r.Context())
+	latest := s.latestCompleteSnapshotID(ctx)
 	key := diffKey{from: fromID, to: toID, topN: topN, cross: cross, latest: latest}
 
 	s.diffMu.Lock()
 	res, ok := s.diffCache[key]
 	if !ok {
-		res, err = rules.Diff(r.Context(), s.st, diff.Options{
+		res, err = rules.Diff(ctx, s.st, diff.Options{
 			FromID: fromID, ToID: toID, TopN: topN, CrossVolume: cross,
 		}, s.rules)
 		if err == nil {
@@ -79,20 +88,117 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.diffMu.Unlock()
+	return res, err
+}
 
+func writeDiffError(w http.ResponseWriter, err error) {
+	status := http.StatusBadRequest
+	if errors.Is(err, store.ErrSnapshotNotFound) {
+		status = http.StatusNotFound
+	}
+	writeError(w, status, err.Error())
+}
+
+// handleUnexplained serves a paginated, searchable view of the unexplained
+// growth sample retained in memory. Read-only; it never writes rules.
+func (s *Server) handleUnexplained(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	res, err := s.cachedDiff(r.Context(), q)
 	if err != nil {
-		status := http.StatusBadRequest
-		if errors.Is(err, store.ErrSnapshotNotFound) {
-			status = http.StatusNotFound
-		}
-		writeError(w, status, err.Error())
+		writeDiffError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, res)
+	limit, err := queryInt(q, "limit", 100, 1, 1000)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	offset, err := queryInt(q, "offset", 0, 0, 1_000_000)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	filter := strings.ToLower(strings.TrimSpace(q.Get("q")))
+
+	var all []model.UnexplainedItem
+	var growth, explained int64
+	var pct float64
+	var unexplainedTotal, sample int
+	if ex := res.Explanation; ex != nil {
+		all = ex.AllUnexplained
+		growth, explained, pct = ex.GrowthBytes, ex.ExplainedBytes, ex.ExplainedPct
+		unexplainedTotal, sample = ex.UnexplainedTotal, len(ex.AllUnexplained)
+	}
+	items := make([]model.UnexplainedItem, 0, len(all))
+	for _, it := range all {
+		if filter != "" && !strings.Contains(strings.ToLower(it.Path), filter) {
+			continue
+		}
+		items = append(items, it)
+	}
+	if q.Get("sort") == "path" {
+		sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
+	}
+	total := len(items)
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	page := items[offset:end]
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":             page,
+		"total":             total,
+		"offset":            offset,
+		"limit":             limit,
+		"unexplained_total": unexplainedTotal,
+		"store_sample":      sample,
+		"truncated":         unexplainedTotal > sample,
+		"growth_bytes":      growth,
+		"explained_bytes":   explained,
+		"explained_pct":     pct,
+		"from_snapshot":     res.FromSnapshot.ID,
+		"to_snapshot":       res.ToSnapshot.ID,
+	})
 }
 
 func (s *Server) handleRules(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.rules)
+}
+
+func (s *Server) handleCategories(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"categories": rules.KnownCategories()})
+}
+
+// handleRulePreview previews a candidate rule against the current unexplained
+// sample. Read-only: it compiles the rule in memory and never writes rules.yaml.
+func (s *Server) handleRulePreview(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	res, err := s.cachedDiff(r.Context(), q)
+	if err != nil {
+		writeDiffError(w, err)
+		return
+	}
+	candidate := rules.Rule{
+		ID:         q.Get("id"),
+		Name:       q.Get("name"),
+		Category:   q.Get("category"),
+		Confidence: q.Get("confidence"),
+		Match: rules.Match{
+			PathGlobs: q["path_globs"],
+			NameGlobs: q["name_globs"],
+		},
+	}
+	var unexplained []model.UnexplainedItem
+	var growth, explained int64
+	if ex := res.Explanation; ex != nil {
+		unexplained = ex.AllUnexplained
+		growth, explained = ex.GrowthBytes, ex.ExplainedBytes
+	}
+	writeJSON(w, http.StatusOK, rules.Preview(s.rules, candidate, unexplained, growth, explained))
 }
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
