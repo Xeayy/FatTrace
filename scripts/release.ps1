@@ -25,6 +25,13 @@ foreach ($arch in @("amd64", "arm64")) {
     go build -trimpath -ldflags "-s -w -X main.version=$Version" -o $out ./cmd/fat
     if ($LASTEXITCODE -ne 0) { throw "go build failed for windows/$arch" }
     $artifacts += $name
+
+    $guiName = "fatgui-$Version-windows-$arch.exe"
+    $guiOut = Join-Path $dist $guiName
+    Write-Host "building $guiName"
+    go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=$Version" -o $guiOut ./cmd/fatgui
+    if ($LASTEXITCODE -ne 0) { throw "go build failed for windows/$arch (fatgui)" }
+    $artifacts += $guiName
 }
 
 $sums = Join-Path $dist "SHA256SUMS.txt"

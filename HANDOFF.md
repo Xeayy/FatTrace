@@ -1,7 +1,7 @@
 # FatTrace 项目交接文档
 
 - 更新时间：2026-11-11
-- 状态：**v1.0.2 已发布**（2026-11-11，卷级差额归因；发布说明 `docs/release-v1.0.2.md`）。**v1.0.1 已发布**（2026-11-10，采集健康告警；发布说明 `docs/release-v1.0.1.md`）。**v1.0.0 已发布**（2026-11-08，首个正式版本；发布说明 `docs/release-v1.0.0.md`）。**M0–M7b 已完成并推送**（M7 `2882f39`，M7b `5dd8bd6`）；**M8a 非侵入式加固已完成代码、测试与文档，并已推送 master**（`e461de4`，CI 修复 `47365f0`，CI 稳定化 `81273c4`，最终文档 `3d5f09c`）；GitHub Actions `windows-latest` 最终 run `41032487559` 全绿。**2026-11-05 可用性优化与 75 条规则已推送（`ba0fc8c`）**。真实采集已连续到 **2026-11-10（快照 #25 daily：487,750 文件 / 67,538 目录 / 193.80 GiB / 覆盖率 99.38% / 3 个错误；#24 于 11-09 中断后自动补跑）**；原 69 条规则下 `#10→#19`（6.4 天）解释率 **60.01%**，**未达 70% 门禁**；按用户选择保留原记录并补规则后，同一数据重算 **88.07%**（17.78/20.18 GiB，详见下文与 `docs/m8a-results.md`）。**2026-11-02 用户决定简化收尾：取消 M8b（安装器/ACL/提权任务/签名），11-05 用真实数据复核解释率作为唯一前置时间门禁；首份周报、首次文件行清理、14 天无人值守和 4 周 dogfood 改为发布后观察，不阻塞 v1.0。** 首份真实周报已于 2026-11-08 生成；计划任务已重装为电池上不启动、已开始的扫描不终止，doctor 任务检查 healthy。
+- 状态：**v1.1.0 已发布**（2026-11-11，GUI 启动器 `fatgui.exe`；发布说明 `docs/release-v1.1.0.md`）。**v1.0.2 已发布**（2026-11-11，卷级差额归因；发布说明 `docs/release-v1.0.2.md`）。**v1.0.1 已发布**（2026-11-10，采集健康告警；发布说明 `docs/release-v1.0.1.md`）。**v1.0.0 已发布**（2026-11-08，首个正式版本；发布说明 `docs/release-v1.0.0.md`）。**M0–M7b 已完成并推送**（M7 `2882f39`，M7b `5dd8bd6`）；**M8a 非侵入式加固已完成代码、测试与文档，并已推送 master**（`e461de4`，CI 修复 `47365f0`，CI 稳定化 `81273c4`，最终文档 `3d5f09c`）；GitHub Actions `windows-latest` 最终 run `41032487559` 全绿。**2026-11-05 可用性优化与 75 条规则已推送（`ba0fc8c`）**。真实采集已连续到 **2026-11-10（快照 #25 daily：487,750 文件 / 67,538 目录 / 193.80 GiB / 覆盖率 99.38% / 3 个错误；#24 于 11-09 中断后自动补跑）**；原 69 条规则下 `#10→#19`（6.4 天）解释率 **60.01%**，**未达 70% 门禁**；按用户选择保留原记录并补规则后，同一数据重算 **88.07%**（17.78/20.18 GiB，详见下文与 `docs/m8a-results.md`）。**2026-11-02 用户决定简化收尾：取消 M8b（安装器/ACL/提权任务/签名），11-05 用真实数据复核解释率作为唯一前置时间门禁；首份周报、首次文件行清理、14 天无人值守和 4 周 dogfood 改为发布后观察，不阻塞 v1.0。** 首份真实周报已于 2026-11-08 生成；计划任务已重装为电池上不启动、已开始的扫描不终止，doctor 任务检查 healthy。
 - M8a 详情：`docs/m8a-results.md`。已加 doctor 自检、Host/Origin 校验、告警倍数阈值、导出泄露提示、AC-only 调度选项、README/SECURITY/CI/发布脚本；计划任务已于 2026-11-08 重装为 `LeastPrivilege + InteractiveToken + AC-only`。
 - 2026-11-02 全面修复：维护任务等锁、单快照日事件清理、报告“其他目录”虚增三处已修复并有回归测试；真实库已补跑 #15 weekly。已提交推送（`41b4f6b`）。
 - 2026-11-02 可用性优化：新增 `fat serve --open`、`fat setup` 首次引导、`fat tray` 纯 Go 托盘启动器；完整测试、Win32 图标/菜单集成测试与真实库冒烟均通过。已提交推送（`ba0fc8c`）。
@@ -18,7 +18,7 @@
 - 托盘：tooltip 与右键菜单显示健康状态；启动时若为 danger 弹出通知。
 - 真实库验证：`/api/health` 返回 `D:\ ok failures=0 lastComplete=#25 lastFailure=#24 failed`，失败原因为“进程在完成前退出或被系统终止，未写入文件记录”；状态页截图确认面板正常。
 - 发布：tag `v1.0.1`，产物 `fat-1.0.1-windows-amd64.exe`、`arm64.exe` 与 `SHA256SUMS.txt`；发布说明 `docs/release-v1.0.1.md`。
-- 后续提醒（v1.0.2+，不阻塞）：GUI 启动器 + 正式图标；未解释项浏览器/规则助手。
+- 后续提醒（v1.1.0+，不阻塞）：正式图标（待用户拍板）；未解释项浏览器/规则助手。
 
 ### 2026-11-11 卷级差额归因（v1.0.2 已发布）
 
@@ -28,6 +28,16 @@
 - 限制：归因是聚合估算，只能说明差额与不可见空间整体变化吻合，不能定位具体保护目录或 VSS；FatTrace 不使用 VSS、不提权枚举。
 - 验证：`gofmt` 无输出、`go vet ./...` 与 `go test ./... -count=1` 全绿；新增 `TestVolumeCheckAttribution`、`TestFormatBytesSigns`；周报 `report-19-20.html` 与 SPA `#/compare?to=20` 已用本机 Chrome 渲染核验。详细见 `docs/volume-gap-attribution.md`。
 - 发布：tag `v1.0.2`，产物 `fat-1.0.2-windows-amd64.exe`、`arm64.exe` 与 `SHA256SUMS.txt`；CI `windows` run 全绿；根 `fat.exe` 已更新为 1.0.2。发布说明 `docs/release-v1.0.2.md`。
+
+### 2026-11-11 GUI 启动器（v1.1.0 已发布）
+
+- 新增 `cmd/fatgui`（`-H windowsgui`，GUI 子系统）：薄启动器，隐藏窗口（`HideWindow + CREATE_NO_WINDOW`）拉起同目录 `fat.exe tray`，默认追加 `--open`，尊重 `--open=false`；自身不常驻，单实例/托盘/服务仍由 `fat.exe` 负责。`fat.exe` 缺失或启动失败弹错误框；不写注册表/自启/计划任务。
+- 选方案 A（薄启动器）而非抽 `internal/trayapp` 单进程（方案 B），零重构、风险低；代价是依赖同目录 `fat.exe`。
+- 新增 `scripts/pecheck`（`debug/pe`）校验子系统：fatgui=2(GUI)、fat=3(console)。
+- `release.ps1` 同时构建 `fat` 与 `fatgui` 的 amd64/arm64；产物含 `fatgui-1.1.0-windows-*.exe`。
+- 正式图标暂缓（用户决定先不设计），当前用系统默认图标；图标管线（ImageGen→Pillow 多尺寸 ICO→windres .syso→tray 加载）留作后续。
+- 验证：全量测试绿；新增启动器参数测试；pecheck 通过；受控冒烟 `fatgui --open=false --db <真实库>` 隐藏拉起托盘进程后退出。详见 `docs/gui-launcher.md`。
+- 发布：tag `v1.1.0`；根 `fat.exe`/`fatgui.exe` 已更新为 1.1.0。发布说明 `docs/release-v1.1.0.md`。
 
 ## 0. 项目一句话
 
@@ -69,6 +79,8 @@ FatTrace/
   cmd/fat/serve.go              CLI: serve（回环监听、每会话 token、打印 #t= URL、--open 调系统浏览器）
   cmd/fat/setup.go              CLI: setup（初始化/迁移、配置补全、roots 引导、计划任务检查与可选安装）
   cmd/fat/tray.go               CLI: tray（单实例托盘、内置只读服务、面板/扫描/数据目录/退出）
+  cmd/fatgui/main.go            GUI 启动器（windowsgui）：隐藏拉起 fat tray --open，无控制台闪窗
+  scripts/pecheck/main.go       PE 子系统校验工具（fatgui=2 / fat=3）
   cmd/fat/browser_windows.go    回环 URL 校验 + rundll32 打开默认浏览器
   cmd/fat/setup_test.go         setup 辅助函数与 URL 安全拒绝测试
   internal/model/model.go       FileRecord / ScanError / ScanStats
@@ -148,7 +160,9 @@ FatTrace/
   docs/m7-results.md            M7 实测记录（配置、日汇总 99.37%、告警、保留、计划任务）
   docs/m7b-results.md           M7b 实测记录（文件行降采样、自动周报、滚动日志、过期 diff 提示）
   docs/m8a-results.md           M8a 实测记录（doctor、Host/Origin、倍数告警、导出提示、AC-only、偏差）
-  docs/volume-gap-attribution.md 卷级差额归因口径、真实数据与限制（2026-11-11，未发布）
+  docs/volume-gap-attribution.md 卷级差额归因口径、真实数据与限制（2026-11-11，v1.0.2）
+  docs/gui-launcher.md          GUI 启动器方案、子系统校验与限制（2026-11-11，v1.1.0）
+  docs/release-v1.1.0.md        v1.1.0 发布说明
   README.md                     快速开始、命令表、配置、隐私、限制、排障
   SECURITY.md                   安全边界、敏感数据、漏洞报告
   .github/workflows/ci.yml      windows-latest: vet / test / build / doctor 冒烟

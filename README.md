@@ -24,6 +24,7 @@ FatTrace 是一个面向 Windows 10/11 + NTFS 的本地磁盘增长追踪工具�
 - 保留策略与自动周报；文件行降采样，目录聚合长期保留。
 - Windows 计划任务：每日/每周扫描、错过后补跑、可仅交流电运行。
 - 首次运行引导（`fat setup`）与托盘启动器（`fat tray`）：托盘右键可打开面板、立即扫描、查看下次运行、退出。
+- GUI 启动器（`fatgui.exe`）：Windows GUI 子系统，双击直接启动托盘并打开面板，无控制台闪窗。
 - 采集健康告警：连续失败、上次失败原因与数据过期（`alerts.stale_hours`，默认 36 小时）在 `fat doctor`、托盘和 Web 状态页同时提示。
 - 卷级差额归因：校验不通过时区分扫描不可见区域（系统保护区/卷影副本/文件系统元数据）与真实文件统计差额。
 - `fat doctor` 自检：配置、数据库完整性、快照新鲜度、覆盖率、规则、存储空间、计划任务。
@@ -39,13 +40,13 @@ FatTrace 是一个面向 Windows 10/11 + NTFS 的本地磁盘增长追踪工具�
 ```powershell
 git clone <private-repo-url> FatTrace
 cd FatTrace
-go build -trimpath -ldflags "-s -w -X main.version=1.0.2" -o dist\fat.exe .\cmd\fat
+go build -trimpath -ldflags "-s -w -X main.version=1.1.0" -o dist\fat.exe .\cmd\fat
 ```
 
 或使用发布脚本生成 amd64/arm64 两个架构与 SHA256 校验文件：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.0.2
+powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.1.0
 ```
 
 产物位于 `dist/`（已被 `.gitignore` 忽略）。
@@ -64,11 +65,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.0.2
 # 3. 日常使用：托盘启动器；右键图标可打开面板、立即扫描、退出
 .\fat.exe tray
 
+# 图形入口（推荐双击）：GUI 启动器，无控制台闪窗
+.\fatgui.exe
+
 # 只开网页、不要托盘
 .\fat.exe serve --open
 ```
 
-`fat setup` 会检查计划任务：全部已存在时不做改动；缺失时交互式询问是否安装，非交互环境需显式 `-install-tasks`。`fat tray` 常驻并在随机回环端口启动只读网页，双击图标打开面板；它不会自动加入开机启动。首次只有一份快照时，diff/报告没有可比对象，这是正常的；等第二次快照后再看。
+`fat setup` 会检查计划任务：全部已存在时不做改动；缺失时交互式询问是否安装，非交互环境需显式 `-install-tasks`。`fat tray` 常驻并在随机回环端口启动只读网页，双击图标打开面板；它不会自动加入开机启动。`fatgui.exe` 是与 `fat.exe` 同目录的 GUI 启动器，双击它等价于隐藏窗口运行 `fat tray --open`，适合放到桌面/任务栏；单实例、托盘与服务仍由 `fat.exe` 负责。首次只有一份快照时，diff/报告没有可比对象，这是正常的；等第二次快照后再看。
 
 ## 计划任务
 
@@ -94,6 +98,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.0.2
 | --- | --- |
 | `fat setup` | 首次配置：初始化数据库、生成/补全配置、检查并可选安装计划任务 |
 | `fat tray` | 托盘启动器：常驻图标，右键打开面板、立即扫描、退出；自动启动只读网页 |
+| `fatgui.exe` | GUI 启动器：双击无控制台闪窗，隐藏拉起 `fat tray --open`；需与 `fat.exe` 同目录 |
 | `fat scan <root>` | 只枚举并打印统计，不写数据库 |
 | `fat snap [--kind daily\|weekly\|manual] <root>` | 采集快照并写入数据库 |
 | `fat diff` | 比较两次快照，输出增长/删除 Top |
@@ -135,6 +140,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.0.2
 - 不支持 FAT/exFAT/ReFS、网络共享、跨卷硬链接和文件内容分析。
 - 不是实时监控，也不是杀毒/勒索软件防护工具；只按计划给出增长线索。
 - `fat tray` 不安装开机自启动项；需要开机常驻时请自行放入启动文件夹（这是用户侧系统变更）。
+- `fatgui.exe` 依赖同目录的 `fat.exe`；正式图标尚未定稿，当前使用系统默认图标。
 - 安装到 `Program Files`、签名与提权安装尚未提供；当前推荐以普通用户运行。
 
 ## 排障
