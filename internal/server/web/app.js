@@ -31,7 +31,12 @@ class ApiError extends Error {
 async function api(name, params = {}) {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    if (v === undefined || v === null || v === "") continue;
+    if (Array.isArray(v)) {
+      for (const x of v) if (x !== "") q.append(k, String(x));
+    } else {
+      q.set(k, String(v));
+    }
   }
   const url = "/api/" + name + (q.size ? "?" + q.toString() : "");
   let res;
@@ -1494,12 +1499,280 @@ async function viewStatus(root) {
   root.appendChild(pr);
 }
 
+// ---------- unexplained browser + rule assistant ----------
+
+let ruleDraft = {
+  id: "", name: "", category: "app-cache", confidence: "medium",
+  path_globs: "", name_globs: "",
+};
+let lastPreview = null;
+
+function splitGlobs(text) {
+  return String(text || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+}
+
+function yamlQuote(s) {
+  return "'" + String(s).replace(/'/g, "''") + "'";
+}
+
+function buildRulesYaml(d) {
+  const lines = [
+    "version: 1", "rules:",
+    "  - id: " + yamlQuote(d.id),
+    "    name: " + yamlQuote(d.name),
+    "    category: " + yamlQuote(d.category),
+    "    confidence: " + yamlQuote(d.confidence),
+    "    match:",
+  ];
+  const pg = splitGlobs(d.path_globs), ng = splitGlobs(d.name_globs);
+  if (pg.length) { lines.push("      path_globs:"); for (const g of pg) lines.push("        - " + yamlQuote(g)); }
+  if (ng.length) { lines.push("      name_globs:"); for (const g of ng) lines.push("        - " + yamlQuote(g)); }
+  return lines.join("\n") + "\n";
+}
+
+// suggestGlob wildcards version-like segments in the parent directory and
+// matches the subtree, as a starting point the user should narrow.
+function suggestGlob(path) {
+  const norm = String(path).replace(/\//g, "\\");
+  const i = norm.lastIndexOf("\\");
+  const parent = i > 0 ? norm.slice(0, i) : norm;
+  const segs = parent.split("\\").map((s) =>
+    (/^\d+(\.\d+)+$/.test(s) || /^v\d/i.test(s)) ? "*" : s);
+  return segs.join("\\") + "\\**";
+}
+
+function fileNameOf(p) {
+  const n = String(p).replace(/\//g, "\\");
+  const i = n.lastIndexOf("\\");
+  return i >= 0 ? n.slice(i + 1) : n;
+}
+
+async function viewUnexplained(root, params) {
+  const from = params.get("from") || "";
+  const to = params.get("to") || "";
+  const q = params.get("q") || "";
+  const sort = params.get("sort") || "";
+  const offset = parseInt(params.get("offset") || "0", 10) || 0;
+  const limit = 100;
+
+  const [snapsResp, catsResp, U] = await Promise.all([
+    api("snapshots", { limit: 500 }),
+    api("categories"),
+    api("unexplained", { from, to, q, sort, offset, limit }),
+  ]);
+  const complete = snapsResp.snapshots.filter((s) => s.status === "complete");
+  const cats = catsResp.categories || [];
+
+  const nav = (over) => {
+    const pick = (k, cur) => (over[k] !== undefined ? over[k] : cur);
+    const qs = new URLSearchParams();
+    if (pick("from", from)) qs.set("from", pick("from", from));
+    if (pick("to", to)) qs.set("to", pick("to", to));
+    if (pick("q", q)) qs.set("q", pick("q", q));
+    if (pick("sort", sort)) qs.set("sort", pick("sort", sort));
+    const off = pick("offset", offset);
+    if (off) qs.set("offset", String(off));
+    const s = qs.toString();
+    location.hash = "#/unexplained" + (s ? "?" + s : "");
+  };
+
+  const controls = el("div", "controls");
+  const mkSel = (cur, autoLabel) => {
+    const sel = el("select");
+    const a = el("option", null, autoLabel); a.value = ""; sel.appendChild(a);
+    for (const s of complete) {
+      const o = el("option", null, snapshotLabel(s)); o.value = String(s.id);
+      if (String(s.id) === String(cur)) o.selected = true;
+      sel.appendChild(o);
+    }
+    return sel;
+  };
+  const fromSel = mkSel(U.from_snapshot, "自动（上一个 complete）");
+  const toSel = mkSel(U.to_snapshot, "自动（最新 complete）");
+  fromSel.addEventListener("change", () => nav({ from: fromSel.value, offset: 0 }));
+  toSel.addEventListener("change", () => nav({ to: toSel.value, offset: 0 }));
+  controls.appendChild(el("label", null, "从")); controls.appendChild(fromSel);
+  controls.appendChild(el("label", null, "到")); controls.appendChild(toSel);
+
+  const search = el("input"); search.type = "search"; search.value = q;
+  search.placeholder = "按路径过滤…"; search.setAttribute("aria-label", "按路径过滤");
+  search.addEventListener("keydown", (e) => { if (e.key === "Enter") nav({ q: search.value, offset: 0 }); });
+  const searchBtn = el("button", null, "过滤");
+  searchBtn.addEventListener("click", () => nav({ q: search.value, offset: 0 }));
+  controls.appendChild(search); controls.appendChild(searchBtn);
+
+  const sortSel = el("select");
+  for (const [v, label] of [["", "按大小"], ["path", "按路径"]]) {
+    const o = el("option", null, label); o.value = v; if (v === sort) o.selected = true;
+    sortSel.appendChild(o);
+  }
+  sortSel.addEventListener("change", () => nav({ sort: sortSel.value, offset: 0 }));
+  controls.appendChild(el("label", null, "排序")); controls.appendChild(sortSel);
+  root.appendChild(controls);
+
+  const sum = panel("未解释增长", "规则只贴标签、不改数字；这里是 75 条规则都没认出的正向增长");
+  sum.appendChild(el("div", "notice",
+    "当前解释率 " + fmtPct(U.explained_pct) + " · 未解释 " + fmtBytes(U.growth_bytes - U.explained_bytes) +
+    " · 未解释文件 " + fmtCount(U.unexplained_total) + " 个" +
+    (U.truncated ? "（浏览器仅保留按大小排序的前 " + fmtCount(U.store_sample) + " 个样本）" : "")));
+  root.appendChild(sum);
+
+  const listPanel = panel("未解释项", "点击“助规则”把该项带入下方规则助手");
+  const items = U.items || [];
+  if (!items.length) {
+    listPanel.appendChild(el("div", "empty", "没有未解释项（或过滤无结果）。"));
+  } else {
+    const rows = items.map((it) => {
+      const btn = el("button", null, "助规则");
+      btn.addEventListener("click", () => {
+        ruleDraft.path_globs = suggestGlob(it.path);
+        ruleDraft.name_globs = "";
+        ruleDraft.name = fileNameOf(it.path);
+        ruleDraft.id = "user." + fileNameOf(it.path).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        lastPreview = null;
+        renderAssistant(assistantBox, ctx);
+      });
+      return [
+        td(it.path, "path"),
+        td(it.kind === "added" ? "新增" : "变大"),
+        td(fmtBytes(it.delta_alloc), "num"),
+        tdNode(btn),
+      ];
+    });
+    listPanel.appendChild(dataTable([
+      { label: "路径" }, { label: "类型" }, { label: "实占 Δ", num: true }, { label: "操作" },
+    ], rows));
+    const pager = el("div", "controls");
+    const prev = el("button", null, "上一页"); prev.disabled = offset <= 0;
+    prev.addEventListener("click", () => nav({ offset: Math.max(0, offset - limit) }));
+    const next = el("button", null, "下一页"); next.disabled = offset + limit >= U.total;
+    next.addEventListener("click", () => nav({ offset: offset + limit }));
+    pager.appendChild(prev);
+    pager.appendChild(el("span", "dim", "第 " + (offset + 1) + "–" + Math.min(offset + limit, U.total) + " 条 / 共 " + fmtCount(U.total) + " 条"));
+    pager.appendChild(next);
+    listPanel.appendChild(pager);
+  }
+  root.appendChild(listPanel);
+
+  const ctx = { from: U.from_snapshot, to: U.to_snapshot, cats };
+  const assistantBox = el("div");
+  root.appendChild(assistantBox);
+  renderAssistant(assistantBox, ctx);
+}
+
+function renderAssistant(box, ctx) {
+  box.textContent = "";
+  const p = panel("规则助手", "预览命中 → 生成 rules.yaml 草稿 → 你确认后放入数据库目录并重启生效；服务器不写任何文件");
+  const form = el("div", "controls");
+  const field = (label, input) => { form.appendChild(el("label", null, label)); form.appendChild(input); };
+
+  const idIn = el("input"); idIn.value = ruleDraft.id; idIn.placeholder = "user.my-rule";
+  idIn.addEventListener("input", () => { ruleDraft.id = idIn.value; });
+  const nameIn = el("input"); nameIn.value = ruleDraft.name; nameIn.placeholder = "规则名称";
+  nameIn.addEventListener("input", () => { ruleDraft.name = nameIn.value; });
+  const catSel = el("select");
+  for (const c of ctx.cats) {
+    const o = el("option", null, c.label + "（" + c.category + "）"); o.value = c.category;
+    if (c.category === ruleDraft.category) o.selected = true;
+    catSel.appendChild(o);
+  }
+  catSel.addEventListener("change", () => { ruleDraft.category = catSel.value; });
+  const confSel = el("select");
+  for (const c of ["high", "medium", "low"]) {
+    const o = el("option", null, c); o.value = c; if (c === ruleDraft.confidence) o.selected = true;
+    confSel.appendChild(o);
+  }
+  confSel.addEventListener("change", () => { ruleDraft.confidence = confSel.value; });
+  field("ID", idIn); field("名称", nameIn); field("类别", catSel); field("置信度", confSel);
+  p.appendChild(form);
+
+  const pgIn = el("textarea"); pgIn.rows = 3; pgIn.value = ruleDraft.path_globs;
+  pgIn.placeholder = "每行一个 path_globs，如 **\\Cache\\**";
+  pgIn.addEventListener("input", () => { ruleDraft.path_globs = pgIn.value; });
+  const ngIn = el("textarea"); ngIn.rows = 2; ngIn.value = ruleDraft.name_globs;
+  ngIn.placeholder = "每行一个 name_globs，如 *.log（可留空）";
+  ngIn.addEventListener("input", () => { ruleDraft.name_globs = ngIn.value; });
+  p.appendChild(el("label", null, "路径模式 path_globs")); p.appendChild(pgIn);
+  p.appendChild(el("label", null, "文件名模式 name_globs")); p.appendChild(ngIn);
+
+  const actions = el("div", "controls");
+  const previewBtn = el("button", null, "预览命中");
+  const draftBtn = el("button", null, "生成草稿");
+  actions.appendChild(previewBtn); actions.appendChild(draftBtn);
+  p.appendChild(actions);
+
+  const result = el("div");
+  p.appendChild(result);
+  const showPreview = (rep) => {
+    result.textContent = "";
+    if (!rep) return;
+    if (!rep.valid) {
+      result.appendChild(el("div", "error-box", "规则无效：" + (rep.errors || []).join("；")));
+      return;
+    }
+    result.appendChild(el("div", "notice",
+      "命中 " + fmtCount(rep.matched_files) + " 个未解释文件 · " + fmtBytes(rep.matched_bytes) +
+      " · 预计解释率 " + fmtPct(rep.projected_explained_pct)));
+    for (const w of rep.warnings || []) result.appendChild(el("div", "banner warn", w));
+    if ((rep.sample || []).length) {
+      result.appendChild(el("div", "dim", "示例：" + rep.sample.slice(0, 5).join("；")));
+    }
+  };
+  showPreview(lastPreview);
+
+  previewBtn.addEventListener("click", async () => {
+    previewBtn.disabled = true;
+    try {
+      lastPreview = await api("rules/preview", {
+        from: ctx.from, to: ctx.to,
+        id: ruleDraft.id, name: ruleDraft.name,
+        category: ruleDraft.category, confidence: ruleDraft.confidence,
+        path_globs: splitGlobs(ruleDraft.path_globs),
+        name_globs: splitGlobs(ruleDraft.name_globs),
+      });
+      showPreview(lastPreview);
+    } catch (err) {
+      result.textContent = "";
+      result.appendChild(el("div", "error-box", err.message || String(err)));
+    } finally { previewBtn.disabled = false; }
+  });
+
+  const draftArea = el("textarea"); draftArea.rows = 10; draftArea.readOnly = true;
+  draftArea.style.display = "none";
+  const draftActions = el("div", "controls"); draftActions.style.display = "none";
+  const copyBtn = el("button", null, "复制");
+  const dlBtn = el("button", null, "下载 rules.yaml");
+  draftActions.appendChild(copyBtn); draftActions.appendChild(dlBtn);
+  p.appendChild(draftArea); p.appendChild(draftActions);
+  p.appendChild(el("div", "notice",
+    "草稿需你确认：保存为 <数据库目录>/rules.yaml（同 ID 覆盖内置），重启 fat serve / fat tray 生效。建议用通用模式，避免为单个应用硬编码。"));
+
+  draftBtn.addEventListener("click", () => {
+    draftArea.value = buildRulesYaml(ruleDraft);
+    draftArea.style.display = ""; draftActions.style.display = "";
+  });
+  copyBtn.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(draftArea.value); copyBtn.textContent = "已复制"; }
+    catch { copyBtn.textContent = "复制失败，请手动选择"; }
+  });
+  dlBtn.addEventListener("click", () => {
+    const blob = new Blob([draftArea.value], { type: "application/x-yaml" });
+    const url = URL.createObjectURL(blob);
+    const a = el("a"); a.href = url; a.download = "rules.yaml";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  box.appendChild(p);
+}
+
 // ---------- router ----------
 
 const views = {
   overview: viewOverview,
   explorer: viewExplorer,
   compare: viewCompare,
+  unexplained: viewUnexplained,
   timeline: viewTimeline,
   rules: viewRules,
   status: viewStatus,

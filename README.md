@@ -25,6 +25,7 @@ FatTrace 是一个面向 Windows 10/11 + NTFS 的本地磁盘增长追踪工具�
 - Windows 计划任务：每日/每周扫描、错过后补跑、可仅交流电运行。
 - 首次运行引导（`fat setup`）与托盘启动器（`fat tray`）：托盘右键可打开面板、立即扫描、查看下次运行、退出。
 - GUI 启动器（`fatgui.exe`）：Windows GUI 子系统，双击直接启动托盘并打开面板，无控制台闪窗。
+- 未解释项浏览器与规则助手：分页浏览未解释增长，预览候选规则命中并生成 `rules.yaml` 草稿；只读，草稿需你确认后手动生效。
 - 采集健康告警：连续失败、上次失败原因与数据过期（`alerts.stale_hours`，默认 36 小时）在 `fat doctor`、托盘和 Web 状态页同时提示。
 - 卷级差额归因：校验不通过时区分扫描不可见区域（系统保护区/卷影副本/文件系统元数据）与真实文件统计差额。
 - `fat doctor` 自检：配置、数据库完整性、快照新鲜度、覆盖率、规则、存储空间、计划任务。
@@ -40,13 +41,13 @@ FatTrace 是一个面向 Windows 10/11 + NTFS 的本地磁盘增长追踪工具�
 ```powershell
 git clone <private-repo-url> FatTrace
 cd FatTrace
-go build -trimpath -ldflags "-s -w -X main.version=1.1.0" -o dist\fat.exe .\cmd\fat
+go build -trimpath -ldflags "-s -w -X main.version=1.2.0" -o dist\fat.exe .\cmd\fat
 ```
 
 或使用发布脚本生成 amd64/arm64 两个架构与 SHA256 校验文件：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.1.0
+powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.2.0
 ```
 
 产物位于 `dist/`（已被 `.gitignore` 忽略）。
