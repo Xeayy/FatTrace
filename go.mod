@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/mattn/go-isatty v0.0.24
-	golang.org/x/sys v0.49.0
+	golang.org/x/sys v0.50.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.61.0
 )
