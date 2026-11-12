@@ -42,13 +42,13 @@ FatTrace 是一个面向 Windows 10/11 + NTFS 的本地磁盘增长追踪工具�
 ```powershell
 git clone <private-repo-url> FatTrace
 cd FatTrace
-go build -trimpath -ldflags "-s -w -X main.version=1.3.0" -o dist\fat.exe .\cmd\fat
+go build -trimpath -ldflags "-s -w -X main.version=1.3.1" -o dist\fat.exe .\cmd\fat
 ```
 
 或使用发布脚本生成 amd64/arm64 两个架构与 SHA256 校验文件：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.3.0
+powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.3.1
 ```
 
 产物位于 `dist/`（已被 `.gitignore` 忽略）。
@@ -142,7 +142,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.3.0
 - 不支持 FAT/exFAT/ReFS、网络共享、跨卷硬链接和文件内容分析。
 - 不是实时监控，也不是杀毒/勒索软件防护工具；只按计划给出增长线索。
 - `fat tray` 不安装开机自启动项；需要开机常驻时请自行放入启动文件夹（这是用户侧系统变更）。
-- `fatgui.exe` 依赖同目录的 `fat.exe`。图标为深色圆角底（描边与背景同色，透明抠图会丢描边）；16px 为简化轮廓。
+- `fatgui.exe` 依赖同目录的 `fat.exe`。图标为深色圆角底（描边与背景同色，透明抠图会丢描边）；≤32px 用单独重画的简化字形。
 - 安装到 `Program Files`、签名与提权安装尚未提供；当前推荐以普通用户运行。
 
 ## 排障
