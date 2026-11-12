@@ -199,7 +199,7 @@ note: retention only deletes FatTrace history; scanned files are never touched.
 ## 5. 已知边界
 
 - `InteractiveToken` 任务只在用户登录时运行；机器关机或错过时间依赖 `StartWhenAvailable` 补跑一次，不做补偿队列。
-- 计划任务以当前用户运行，不解决非管理员覆盖率缺口；需要全盘可见性时应在受控路径放二进制并提权安装（见 SECURITY.md 权限章节）。
+
 - 日汇总只认卷根 complete 快照；子目录快照、partial/failed 不参与，基线最多回溯到“之前最近有数据的那天”，跨多日未扫描时一天会覆盖多日增量。
 - 告警只比较**最新日汇总的净值**；删除多于新增时为负，不会触发增长告警（符合预期），但也意味着“大量替换”只能从观测增长与 Top 目录看出。
 - 解释率依赖当前 69 条规则；浏览器自更新、便携工具等未覆盖路径会留在未解释榜单（本次 919.34 MiB）。

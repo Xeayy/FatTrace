@@ -36,4 +36,4 @@
 - `fatgui-1.2.0-windows-arm64.exe`
 - `SHA256SUMS.txt`
 
-完整交接见 `docs/architecture.md`，细节见 `docs/unexplained-browser.md`。
+

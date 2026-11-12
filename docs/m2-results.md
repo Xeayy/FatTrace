@@ -45,7 +45,7 @@ export FATTRACE_HOME='D:\FatTraceDemo\.cache\fattrace'
 
 差异说明：两次目录数完全一致；文件数差 2、实占差约 0.13 GiB，来源是运行间的瞬时文件（包括 `fattrace.db`/WAL 自身的增长），属于预期噪声。
 
-子目录快照（`D:/FatTraceDemo/tools`）：15,638 文件 / 1,715 目录 / 331.50 MiB，485ms，`baseline_updated=false`。
+子目录快照（`D:\FatTraceDemo/tools`）：15,638 文件 / 1,715 目录 / 331.50 MiB，485ms，`baseline_updated=false`。
 
 ## 3. 会计一致性（快照 #3 = 第二次全卷）
 

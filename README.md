@@ -174,4 +174,4 @@ go build ./cmd/fat
 $env:FATTRACE_TRAY_UI_TEST = "1"; go test .\internal\tray -run ShellIcon -v -count=1
 ```
 
-项目决策与各里程碑验收记录见 [docs/architecture.md](docs/architecture.md) 和 `docs/`。
+

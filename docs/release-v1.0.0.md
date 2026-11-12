@@ -44,4 +44,4 @@
 - `fat-1.0.0-windows-arm64.exe`
 - `SHA256SUMS.txt`
 
-完整交接与验收记录见 `docs/architecture.md` 与 `docs/architecture.md`。
+
