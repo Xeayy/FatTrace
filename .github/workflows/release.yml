@@ -17,25 +17,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Build dual-arch artifacts
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+      - name: Build dual-arch artifacts and installer
         run: |
           $ver = $env:GITHUB_REF_NAME -replace '^v',''
-          New-Item -ItemType Directory -Force dist | Out-Null
-          $env:CGO_ENABLED = "0"
-          $env:GOOS = "windows"
-          foreach ($arch in @("amd64","arm64")) {
-            $env:GOARCH = $arch
-            go build -trimpath -ldflags "-s -w -X main.version=$ver" -o "dist/fat-$ver-windows-$arch.exe" ./cmd/fat
-            if ($LASTEXITCODE -ne 0) { throw "build fat $arch failed" }
-            go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=$ver" -o "dist/fatgui-$ver-windows-$arch.exe" ./cmd/fatgui
-            if ($LASTEXITCODE -ne 0) { throw "build fatgui $arch failed" }
-          }
-          $sums = "dist/SHA256SUMS.txt"
-          Remove-Item -Force $sums -ErrorAction SilentlyContinue
-          Get-ChildItem dist -Filter *.exe | ForEach-Object {
-            $h = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant()
-            "$h  $($_.Name)" | Add-Content -Encoding ascii $sums
-          }
+          powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version $ver
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:

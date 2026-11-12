@@ -2,10 +2,11 @@
 
 发布日期：2026-11-12
 
-图标小尺寸优化补丁。为 16/24/32px 单独重画简化字形（去掉刻度/高光/中心 hub），≥48px 仍用原稿；解决托盘/任务栏小尺寸发糊的问题。功能与 v1.3.0 相同。
+图标小尺寸优化补丁与安装包发布。为 16/24/32px 单独重画简化字形（去掉刻度/高光/中心 hub），≥48px 仍用原稿；解决托盘/任务栏小尺寸发糊的问题。新增 Windows 标准安装向导（安装包）。
 
 ## 变更
 
+- **新增 Windows 安装包（Setup.exe）**：支持向导安装、自定义路径（默认免管理员权限）、自动创建桌面与开始菜单快捷方式、完整卸载与首启运行。
 - **混合 ICO**：16/24/32 用简化字形（蓝盘 + 橙色卷尺带 + 尾），48/64/128/256 用原稿；手动打包 PNG-entry ICO。
 - 简化字形源 `assets/icon/fattrace-small-1024.png`；对比预览 `assets/icon/preview-small.png`。
 - `windres` 重生成 `cmd/fat/rsrc.syso`、`cmd/fatgui/rsrc.syso`。
@@ -22,6 +23,7 @@
 
 ## 产物
 
+- `FatTrace-Setup-1.3.1-windows-amd64.exe`（Windows 安装包，**推荐**）
 - `fat-1.3.1-windows-amd64.exe` / `arm64.exe`
 - `fatgui-1.3.1-windows-amd64.exe` / `arm64.exe`
 - `SHA256SUMS.txt`
