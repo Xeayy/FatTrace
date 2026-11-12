@@ -1,0 +1,27 @@
+# 示例用户规则。复制到 <数据库目录>/rules.yaml 后重启 fat serve / fat tray 生效。
+# 同 ID 会覆盖内置规则；匹配为整段路径 glob（* / ? 段内，** 跨段），大小写不敏感。
+# path_globs 与 name_globs 同时存在时为 AND。冲突按字面量最多者胜（最具体优先）。
+# 规则只贴标签，不改变增量、不触发任何清理。请优先通用模式，避免为单应用硬编码。
+version: 1
+rules:
+  - id: user.mygame-cache
+    name: 我的游戏缓存
+    category: games
+    confidence: medium
+    description: 某游戏目录下的缓存与补丁包
+    match:
+      path_globs:
+        - '**\MyGame\Cache\**'
+        - '**\MyGame\patch-*.pak'
+
+  - id: user.project-build
+    name: 项目构建产物
+    category: dev
+    confidence: high
+    description: 任意项目下的 build 输出目录
+    match:
+      path_globs:
+        - '**\build\**'
+      name_globs:
+        - '*.obj'
+        - '*.pdb'

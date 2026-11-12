@@ -68,9 +68,45 @@
 - 非实时监控；按计划给出增长线索。
 - 不提供自动清理；不是杀毒/勒索防护工具。
 
+## 工作原理
+
+1. **快照**：`NtQueryDirectoryFile` + FileID 枚举元数据（路径/大小/实占/时间戳），硬链接去重、跳过 junction；写入 SQLite（WAL）。
+2. **对比**：按 FileID 对齐两次快照，分类新增/变大/变小/删除/move/rename，做 move-adjusted 目录归因。
+3. **解释**：规则引擎给正向增长贴类别标签，算解释率；未解释项可浏览并半自动补规则。
+4. **校验**：根目录 Δ 与卷用量 Δ 交叉校验；差额归因区分“扫描不可见系统区域”与“文件统计遗漏”。
+5. **展示**：CLI / 单文件 HTML 周报 / 只读本地 Web / 托盘，全部同源数据。
+
+## 常用命令
+
+| 命令 | 作用 |
+|---|---|
+| `fat setup` | 首次配置：建库/配置/检查计划任务 |
+| `fat snap <root>` | 采集一次快照 |
+| `fat maintain --kind daily\|weekly` | 快照+日汇总+告警+(周报/清理) |
+| `fat diff [--from A --to B]` | 对比两次快照 |
+| `fat report [--week]` | 生成单文件 HTML 周报 |
+| `fat serve [--open]` / `fat tray` / `fatgui.exe` | 只读网页 / 托盘 / 无闪窗启动 |
+| `fat daily` / `fat alerts` | 日汇总 / 增长告警 |
+| `fat prune [--apply]` | 清理 FatTrace 自身过期历史（默认 dry-run） |
+| `fat schedule install\|status\|uninstall` | 计划任务管理 |
+| `fat doctor` / `fat status` | 自检 / 概况 |
+
+完整参数见 `fat help`。
+
+## 排障与 FAQ
+
+- **首次运行被 SmartScreen 拦**：无签名所致，选“仍要运行”；或自行签名。
+- **diff/报告说没有可比对象**：只有一份快照；等第二次采集后再看。
+- **覆盖率 <100%**：标准用户读不到受保护目录，属预期；看错误计数与卷级归因。
+- **卷级校验 WARN**：看“差额中未解释”；接近 0 表示差额来自不可见系统区域，通常无需排查。
+- **报告提示 file rows pruned**：文件明细按保留策略清理，目录聚合仍可浏览。
+- **改了 rules.yaml 不生效**：规则在进程启动时加载，重启 `serve`/`tray`。
+- **想要演示/截图数据**：`python scripts/demo_data.py init` → 快照 → `grow` → 再快照（中性数据，见 [scripts/demo_data.py](scripts/demo_data.py)）。
+- 更多：`fat doctor` 会给出可执行 hint；文档索引见 [docs/README.md](docs/README.md)。
+
 ## 配置
 
-配置在数据库同目录 `config.yaml`（`fat config init` 生成）。常用项：
+配置在数据库同目录 `config.yaml`（`fat config init` 生成）；用户规则见 [examples/rules.yaml](examples/rules.yaml)。常用项：
 
 | 键 | 说明 |
 |---|---|

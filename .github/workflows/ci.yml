@@ -19,12 +19,23 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Format check
+        run: |
+          $bad = gofmt -l .
+          if ($bad) { Write-Host "gofmt needed:"; Write-Host $bad; exit 1 }
       - name: Vet
         run: go vet ./...
       - name: Test
         run: go test ./... -count=1
       - name: Build
         run: go build -trimpath -ldflags "-s -w -X main.version=ci" -o fat.exe ./cmd/fat
+      - name: Build GUI launcher
+        run: go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=ci" -o fatgui.exe ./cmd/fatgui
+      - name: Subsystem check
+        run: |
+          $out = go run ./scripts/pecheck fat.exe fatgui.exe
+          Write-Host $out
+          if ("$out" -notmatch 'fat\.exe: subsystem=3' -or "$out" -notmatch 'fatgui\.exe: subsystem=2') { exit 1 }
       - name: Doctor smoke test
         run: |
           .\fat.exe db init
