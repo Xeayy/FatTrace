@@ -29,4 +29,7 @@ jobs:
           files: |
             dist/*.exe
             dist/SHA256SUMS.txt
+          # 发布正文直接取 docs/release-<tag>.md（UTF-8），
+          # 避免手工上传正文时中文被转码成问号
+          body_path: docs/release-${{ github.ref_name }}.md
           generate_release_notes: true
