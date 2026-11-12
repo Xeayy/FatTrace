@@ -11,3 +11,4 @@
 - `python scripts/demo_data.py init` → 快照 → `python scripts/demo_data.py grow` → 再快照。
 - 生成 `D:\FatTraceDemo`（游戏/缓存/日志/项目/应用更新），用于试用与截图，**不含真实用户数据**。
 - 配合 `fat serve --db <demo.db> --open` 查看；README 截图即由此生成。
+- 公开截图务必用中性库路径（如 `D:\FatTraceDemo\fattrace.db`），并把 `volumes.serial` 改为假值（如 `0x12345678`）、label 设为 `Demo`，避免泄露真实工作区路径与卷序列号。

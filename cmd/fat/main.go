@@ -20,51 +20,55 @@ import (
 var version = "0.1.0-dev"
 
 func main() {
-	if len(os.Args) < 2 {
-		usage()
-		os.Exit(2)
+	args := os.Args[1:]
+	if len(args) == 0 {
+		// Double-click / no-arg default: tray + dashboard, no console window
+		// when built as a GUI-subsystem binary. With arguments we behave as a
+		// CLI; a GUI-subsystem process still inherits the caller's std handles
+		// when launched from a terminal, so printing/redirection keeps working.
+		args = []string{"tray", "--open"}
 	}
-	switch os.Args[1] {
+	switch args[0] {
 	case "scan":
-		scanCmd(os.Args[2:])
+		scanCmd(args[1:])
 	case "snap":
-		snapCmd(os.Args[2:])
+		snapCmd(args[1:])
 	case "diff":
-		diffCmd(os.Args[2:])
+		diffCmd(args[1:])
 	case "report":
-		reportCmd(os.Args[2:])
+		reportCmd(args[1:])
 	case "serve":
-		serveCmd(os.Args[2:])
+		serveCmd(args[1:])
 	case "fileid":
-		fileIDCmd(os.Args[2:])
+		fileIDCmd(args[1:])
 	case "db":
-		dbCmd(os.Args[2:])
+		dbCmd(args[1:])
 	case "config":
-		configCmd(os.Args[2:])
+		configCmd(args[1:])
 	case "setup":
-		setupCmd(os.Args[2:])
+		setupCmd(args[1:])
 	case "tray":
-		trayCmd(os.Args[2:])
+		trayCmd(args[1:])
 	case "daily":
-		dailyCmd(os.Args[2:])
+		dailyCmd(args[1:])
 	case "alerts":
-		alertsCmd(os.Args[2:])
+		alertsCmd(args[1:])
 	case "prune":
-		pruneCmd(os.Args[2:])
+		pruneCmd(args[1:])
 	case "schedule":
-		scheduleCmd(os.Args[2:])
+		scheduleCmd(args[1:])
 	case "maintain":
-		maintainCmd(os.Args[2:])
+		maintainCmd(args[1:])
 	case "doctor":
-		doctorCmd(os.Args[2:])
+		doctorCmd(args[1:])
 	case "status":
-		statusCmd(os.Args[2:])
+		statusCmd(args[1:])
 	case "version":
 		fmt.Println(version)
 	case "help", "-h", "--help":
 		usage()
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q\n", os.Args[1])
+		fmt.Fprintf(os.Stderr, "unknown command %q\n", args[0])
 		usage()
 		os.Exit(2)
 	}
