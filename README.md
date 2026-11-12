@@ -1,177 +1,99 @@
-# FatTrace
+<p align="center">
+  <img src="assets/icon/fattrace-1024.png" width="120" alt="FatTrace logo">
+</p>
 
-FatTrace 是一个面向 Windows 10/11 + NTFS 的本地磁盘增长追踪工具。它按计划采集文件系统快照，比较两次快照之间的增长与删除，用规则解释增长来源，并通过离线 HTML 报告和只读本地网页展示结果。
+<h1 align="center">FatTrace</h1>
 
-它只回答“哪里在长、长了多少、可能是什么”，**不删除、不移动、不清理任何用户文件**。所有处置动作都需要你自己判断和执行。
+<p align="center">
+  <a href="https://github.com/Xeayy/FatTrace/actions/workflows/ci.yml"><img src="https://github.com/Xeayy/FatTrace/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License MIT"></a>
+  <a href="https://github.com/Xeayy/FatTrace/releases/latest"><img src="https://img.shields.io/github/v/release/Xeayy/FatTrace" alt="Release"></a>
+</p>
 
-## 设计边界
+<p align="center">
+  Windows 本地磁盘增长追踪器：每天拍快照、每周做对比，回答三个问题——<b>哪里在长、长了多少、可能是什么</b>。<br>
+  只观察、只解释，<b>不删除、不移动、不清理</b>你的任何文件。
+</p>
 
-- 仅支持本地 **NTFS**；跳过重解析点（junction/symlink）、网络路径和其他用户不可读的目录。
-- 只读展示；网页和报告不会写入数据库，也不会执行清理。
-- 无网络请求、无遥测、无外部 CDN；报告是单文件离线 HTML。
-- 非管理员即可运行。受保护目录会体现为覆盖率和扫描错误，不影响其余数据。
-- 不使用 VSS。快照是文件系统枚举结果，不是卷影副本。
-- 删除只发生在 FatTrace 自己的历史数据库上（`fat prune`），永不作用于被扫描文件。
+---
 
-## 功能
+## 它做什么
 
-- 基于 `NtQueryDirectoryFile` + FileID 的快速枚举，硬链接去重，长路径支持。
-- 快照 diff：新增、变大、变小、删除、文件/目录 move 与 rename，目录归因。
-- 75 条内置规则解释增长（缓存、日志、容器、开发产物、应用更新等），支持用户 `rules.yaml` 覆盖。
-- 单文件 HTML 报告：概览、treemap、增长/删除 Top、解释率、扫描错误。
-- 只读本地网页：总览、下钻、快照对比、时间轴、日汇总、告警、配置与规则查看。
-- 日汇总、增长率告警（绝对量 / 占比 / 相对中位数倍数）与静默窗口。
-- 保留策略与自动周报；文件行降采样，目录聚合长期保留。
-- Windows 计划任务：每日/每周扫描、错过后补跑、可仅交流电运行。
-- 首次运行引导（`fat setup`）与托盘启动器（`fat tray`）：托盘右键可打开面板、立即扫描、查看下次运行、退出。
-- GUI 启动器（`fatgui.exe`）：Windows GUI 子系统，双击直接启动托盘并打开面板，无控制台闪窗。
-- 未解释项浏览器与规则助手：分页浏览未解释增长，预览候选规则命中并生成 `rules.yaml` 草稿；只读，草稿需你确认后手动生效。
-- 正式图标：exe / 托盘 / 快捷方式 / 网页 favicon 统一“卷尺量磁盘”标识。
-- 采集健康告警：连续失败、上次失败原因与数据过期（`alerts.stale_hours`，默认 36 小时）在 `fat doctor`、托盘和 Web 状态页同时提示。
-- 卷级差额归因：校验不通过时区分扫描不可见区域（系统保护区/卷影副本/文件系统元数据）与真实文件统计差额。
-- `fat doctor` 自检：配置、数据库完整性、快照新鲜度、覆盖率、规则、存储空间、计划任务。
+- **每日快照 + 每周全量对比**：用 NTFS FileID 对齐文件/目录，识别新增、变大、变小、删除、move/rename，并做目录归因。
+- **规则解释增长**：75 条内置规则把增长归类为缓存、日志、应用更新、游戏安装、开发产物等；支持用户 `rules.yaml` 扩展。
+- **多种查看方式**：单文件离线 HTML 周报、只读本地网页（treemap / 下钻 / 对比 / 时间轴）、系统托盘、命令行。
+- **未解释项浏览器 + 规则助手**：浏览没被规则认出的增长，预览候选规则命中，生成 `rules.yaml` 草稿（需你确认才生效）。
+- **采集健康告警**：扫描失败、连续失败、数据过期会在 doctor / 托盘 / 网页统一提示。
+- **无人值守**：Windows 计划任务每日/每周自动采集，错过补跑，可仅交流电运行。
 
-## 环境要求
+## 截图
 
-- Windows 10/11，NTFS 本地卷。
-- 从源码构建需要 Go 1.27 或更高版本；运行只需要 `fat.exe`。
-- 不需要管理员权限。管理员运行能减少不可读目录，但不是必需。
+| 对比与 treemap | 未解释项浏览器 |
+|---|---|
+| ![对比](docs/images/compare.png) | ![未解释](docs/images/unexplained.png) |
 
-## 构建
+| 规则与设置 | 状态与健康 |
+|---|---|
+| ![规则](docs/images/rules.png) | ![状态](docs/images/status.png) |
 
-```powershell
-git clone <private-repo-url> FatTrace
-cd FatTrace
-go build -trimpath -ldflags "-s -w -X main.version=1.3.1" -o dist\fat.exe .\cmd\fat
-```
+> 截图来自中性演示数据（`D:\FatTraceDemo`），非真实用户文件。
 
-或使用发布脚本生成 amd64/arm64 两个架构与 SHA256 校验文件：
+## 一分钟上手
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version 1.3.1
-```
+1. 从 [Releases](https://github.com/Xeayy/FatTrace/releases/latest) 下载 `fat-<版本>-windows-amd64.exe` 与 `fatgui-<版本>-windows-amd64.exe`，**放在同一目录**（可重命名为 `fat.exe` / `fatgui.exe`）。
+2. 双击 `fatgui.exe`：无控制台闪窗，启动托盘并打开本地面板。
+3. 首次按提示设置扫描根（如 `D:\`）；之后可安装计划任务自动采集。
 
-产物位于 `dist/`（已被 `.gitignore` 忽略）。
-
-## 快速开始
-
-数据库默认位于 `%LOCALAPPDATA%\FatTrace\fattrace.db`。`--db` 覆盖文件路径，`FATTRACE_HOME` 覆盖目录。
+命令行等价流程：
 
 ```powershell
-# 1. 首次运行：初始化数据库、生成配置、按提示填写扫描根
-.\fat.exe setup
-
-# 2. 采集第一份快照（setup 的 next 会给出可直接复制的命令）
-.\fat.exe maintain --kind daily
-
-# 3. 日常使用：托盘启动器；右键图标可打开面板、立即扫描、退出
-.\fat.exe tray
-
-# 图形入口（推荐双击）：GUI 启动器，无控制台闪窗
-.\fatgui.exe
-
-# 只开网页、不要托盘
-.\fat.exe serve --open
+.\fat.exe setup -roots "D:\"     # 初始化数据库/配置，检查计划任务
+.\fat.exe maintain --kind daily  # 采集一次快照 + 日汇总 + 告警
+.\fat.exe tray                   # 托盘 + 只读网页（或双击 fatgui.exe）
+.\fat.exe report --week          # 生成单文件 HTML 周报
 ```
 
-`fat setup` 会检查计划任务：全部已存在时不做改动；缺失时交互式询问是否安装，非交互环境需显式 `-install-tasks`。`fat tray` 常驻并在随机回环端口启动只读网页，双击图标打开面板；它不会自动加入开机启动。`fatgui.exe` 是与 `fat.exe` 同目录的 GUI 启动器，双击它等价于隐藏窗口运行 `fat tray --open`，适合放到桌面/任务栏；单实例、托盘与服务仍由 `fat.exe` 负责。首次只有一份快照时，diff/报告没有可比对象，这是正常的；等第二次快照后再看。
+> 无安装器、无代码签名：首次运行可能触发 SmartScreen，选择“仍要运行”即可。无需管理员权限。
 
-## 计划任务
+## 隐私与安全
 
-```powershell
-# 先看将要安装什么（只写 tasks/*.xml 并打印 schtasks 命令）
-.\fat.exe schedule install --dry-run
-
-# 安装 / 替换
-.\fat.exe schedule install
-.\fat.exe schedule install --force
-
-# 查看配置与已安装任务
-.\fat.exe schedule status
-```
-
-默认每日 03:00、每周日 04:00，以当前用户、最低权限运行。`schedule.ac_only: true`（默认）表示用电池时计划扫描会等待接入交流电；手动 `fat snap` 不受影响。任务配置了 `StartWhenAvailable`，错过的运行会在恢复后补跑。
-
-修改 `config.yaml` 后需要 `fat schedule install --force` 才会更新已安装任务的定义。这是系统级变更，请先确认。
-
-## 常用命令
-
-| 命令 | 作用 |
-| --- | --- |
-| `fat setup` | 首次配置：初始化数据库、生成/补全配置、检查并可选安装计划任务 |
-| `fat tray` | 托盘启动器：常驻图标，右键打开面板、立即扫描、退出；自动启动只读网页 |
-| `fatgui.exe` | GUI 启动器：双击无控制台闪窗，隐藏拉起 `fat tray --open`；需与 `fat.exe` 同目录 |
-| `fat scan <root>` | 只枚举并打印统计，不写数据库 |
-| `fat snap [--kind daily\|weekly\|manual] <root>` | 采集快照并写入数据库 |
-| `fat diff` | 比较两次快照，输出增长/删除 Top |
-| `fat report` | 生成单文件离线 HTML 报告 |
-| `fat serve` | 启动只读本地网页；`--open` 直接用系统浏览器打开 |
-| `fat daily` | 重算最近日汇总 |
-| `fat alerts` | 评估增长告警；`--mute 24h` / `--unmute` |
-| `fat prune` | 清理 FatTrace 自己的过期历史；默认 dry-run，`--apply` 才执行 |
-| `fat maintain` | 计划任务入口：快照 → 日汇总 → 告警 →（周报/清理） |
-| `fat schedule install\|uninstall\|status` | 管理计划任务 |
-| `fat doctor` | 只读自检；`--strict` 让警告也返回非零 |
-| `fat status` | 数据库与快照概况 |
-| `fat config init\|show` | 生成 / 查看配置 |
-| `fat db init` | 创建或迁移数据库 |
-
-完整参数见 `fat help`。
-
-## 配置
-
-配置文件固定在数据库同目录的 `config.yaml`，由 `fat config init` 生成。所有保留期限只作用于 FatTrace 自己的历史：
-
-- `schedule.roots`：扫描根；留空时 `schedule install` 和 `maintain` 会拒绝运行。
-- `schedule.ac_only`：计划扫描是否仅交流电。
-- `retention.*`：快照、文件行、日汇总、文件事件的保留时间；`auto_prune` 控制维护任务是否自动清理。
-- `alerts.growth_bytes` / `growth_pct`：单日净增长的绝对量与占已用比例阈值，0 表示关闭。
-- `alerts.growth_multiple`：相对前 14 天正增长日中位数的倍数阈值，0 表示关闭；`growth_multiple_floor_bytes` 防止小基数产生噪声。
-- `alerts.silence_hours`：触发后的静默窗口，只压制重复提醒，不隐藏事实。
-
-## 数据与隐私
-
-数据库、报告和日志包含**完整文件路径、大小与增长明细**。它们位于本机，FatTrace 不会上传任何内容；但把报告发给他人或上传到外部服务前，请自行检查是否包含账号名、项目名、客户名等敏感信息。详见 [SECURITY.md](SECURITY.md)。
-
-数据库自身也会被扫描到（如果扫描根覆盖了它），这是已知的自指噪声，不影响其他目录的结论。
+- **完全本地**：仅监听 `127.0.0.1` 随机端口 + 每会话 token；无网络请求、无遥测、无云同步。
+- **只读**：网页与报告不提供任何写/删除接口；清理只发生在 FatTrace 自己的历史数据库（`fat prune`），**永不触碰被扫描文件**。
+- 数据库/报告/日志含**完整文件路径与大小**，属本地敏感数据；对外分享前请自行检查。详见 [SECURITY.md](SECURITY.md)。
 
 ## 已知限制
 
-- 非管理员运行时，`System Volume Information` 等受保护目录不可读，覆盖率通常低于 100%。卷级差额归因只能整体估算这部分不可见空间，无法指出具体目录（不使用 VSS、不提权枚举）。
-- 枚举期间发生变化的文件可能造成少量瞬时误差；不是块级快照。
-- 不支持 FAT/exFAT/ReFS、网络共享、跨卷硬链接和文件内容分析。
-- 不是实时监控，也不是杀毒/勒索软件防护工具；只按计划给出增长线索。
-- `fat tray` 不安装开机自启动项；需要开机常驻时请自行放入启动文件夹（这是用户侧系统变更）。
-- `fatgui.exe` 依赖同目录的 `fat.exe`。图标为深色圆角底（描边与背景同色，透明抠图会丢描边）；≤32px 用单独重画的简化字形。
-- 安装到 `Program Files`、签名与提权安装尚未提供；当前推荐以普通用户运行。
+- 仅支持本地 **NTFS**（Windows 10/11）；跳过 junction/symlink、网络路径。
+- 标准用户无法读取受保护目录（如 `System Volume Information`），覆盖率通常 ~99%；卷级差额会归因区分“不可见系统区域”与“文件统计遗漏”。
+- 非实时监控；按计划给出增长线索。
+- 不提供自动清理；不是杀毒/勒索防护工具。
 
-## 排障
+## 配置
 
-先运行：
+配置在数据库同目录 `config.yaml`（`fat config init` 生成）。常用项：
 
-```powershell
-.\fat.exe doctor
-```
+| 键 | 说明 |
+|---|---|
+| `schedule.roots` | 扫描根列表 |
+| `schedule.daily_at` / `weekly_at` | 每日/每周采集时间 |
+| `schedule.ac_only` | 仅交流电启动计划扫描（默认 true） |
+| `retention.*` | 快照/文件行/汇总保留期（只清 FatTrace 自身历史） |
+| `alerts.growth_bytes` / `growth_pct` / `growth_multiple` | 增长告警阈值 |
+| `alerts.stale_hours` | 数据过期阈值（默认 36h） |
 
-它会指出配置、数据库完整性、快照过期、覆盖率不足、文件行已裁剪、规则错误和计划任务状态。`--json` 便于脚本消费，`--skip-tasks` 可在无法访问 Task Scheduler 时使用。
-
-- 任务显示 `not AC-only`：安装的是旧定义，确认后执行 `fat schedule install --force`。
-- 报告提示 `file rows pruned`：该快照的文件明细已按保留策略删除，目录聚合仍可用于浏览。
-- 卷级校验 WARN：先看报告或面板里的“差额中未解释”；接近 0 B 表示差额由扫描不可见区域解释，通常无需排查。
-- 覆盖率低：尝试管理员运行一次手动快照，或接受受保护目录的缺口。
-
-## 开发与测试
+## 从源码构建
 
 ```powershell
+git clone https://github.com/Xeayy/FatTrace.git
+cd FatTrace
+go build -trimpath -ldflags "-s -w -X main.version=1.3.1" -o fat.exe .\cmd\fat
+go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=1.3.1" -o fatgui.exe .\cmd\fatgui
 go vet ./...
 go test ./... -count=1
-go build ./cmd/fat
 ```
 
-测试覆盖扫描、存储、diff、规则、报告、服务端、告警、保留策略、计划任务解析、setup 与 doctor。部分用例会创建临时 SQLite 数据库；不会触碰真实数据库。托盘的 Win32 结构体与单实例测试默认运行，真实图标/菜单集成测试需显式开启：
+需要 Go 1.27+。发布双架构产物见 `scripts/release.ps1`。贡献指南见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-```powershell
-$env:FATTRACE_TRAY_UI_TEST = "1"; go test .\internal\tray -run ShellIcon -v -count=1
-```
+## 许可
 
-
+[MIT](LICENSE) © Xeayy
