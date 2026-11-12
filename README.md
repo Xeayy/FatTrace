@@ -76,6 +76,8 @@
 4. **校验**：根目录 Δ 与卷用量 Δ 交叉校验；差额归因区分“扫描不可见系统区域”与“文件统计遗漏”。
 5. **展示**：CLI / 单文件 HTML 周报 / 只读本地 Web / 托盘，全部同源数据。
 
+组件与数据流详见 [docs/architecture.md](docs/architecture.md)。
+
 ## 常用命令
 
 | 命令 | 作用 |
@@ -129,6 +131,13 @@ go test ./... -count=1
 ```
 
 需要 Go 1.27+。发布双架构产物见 `scripts/release.ps1`。贡献指南见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## Roadmap
+
+- 可选：独立原生窗口（内嵌 WebView），不占浏览器标签。
+- 规则助手增强：更多通用模式建议、冲突检测可视化。
+- 跨卷移动候选与更多归因线索。
+- 想法与讨论见 [Discussions](https://github.com/Xeayy/FatTrace/discussions)；变更历史见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 许可
 

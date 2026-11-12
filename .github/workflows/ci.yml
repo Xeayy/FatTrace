@@ -36,6 +36,11 @@ jobs:
           $out = go run ./scripts/pecheck fat.exe fatgui.exe
           Write-Host $out
           if ("$out" -notmatch 'fat\.exe: subsystem=3' -or "$out" -notmatch 'fatgui\.exe: subsystem=2') { exit 1 }
+      - name: Cross-build arm64
+        run: |
+          $env:GOARCH = "arm64"
+          go build -trimpath -ldflags "-s -w -X main.version=ci" -o fat-arm64.exe ./cmd/fat
+          go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=ci" -o fatgui-arm64.exe ./cmd/fatgui
       - name: Doctor smoke test
         run: |
           .\fat.exe db init

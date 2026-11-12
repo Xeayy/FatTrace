@@ -1,6 +1,7 @@
 # 文档索引
 
 ## 使用与功能指南
+- [架构概览](architecture.md) — 组件、数据流、关键不变量、存储与保留。
 - [GUI 启动器](gui-launcher.md) — `fatgui.exe` 无闪窗启动、子系统校验。
 - [正式图标](icon.md) — 定案、资产管线、小尺寸简化与限制。
 - [未解释项浏览器 / 规则助手](unexplained-browser.md) — 浏览未解释增长、预览规则、生成草稿。
