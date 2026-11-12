@@ -180,7 +180,10 @@ func (t *Tray) run() error {
 	t.mu.Unlock()
 	registerWindow(t.hwnd, t)
 
-	icon, _, _ := procLoadIconW.Call(0, 32512) // IDI_APPLICATION
+	icon, _, _ := procLoadIconW.Call(instance, 1) // embedded FatTrace icon
+	if icon == 0 {
+		icon, _, _ = procLoadIconW.Call(0, 32512) // IDI_APPLICATION fallback
+	}
 	t.mu.Lock()
 	t.icon = windows.Handle(icon)
 	t.nid = notifyIconData{

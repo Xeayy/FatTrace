@@ -116,6 +116,7 @@ func New(st *store.Store, opts Options) (*Server, error) {
 	s.mux.HandleFunc("GET /{$}", s.serveAsset("/index.html"))
 	s.mux.HandleFunc("GET /app.js", s.serveAsset("/app.js"))
 	s.mux.HandleFunc("GET /app.css", s.serveAsset("/app.css"))
+	s.mux.HandleFunc("GET /favicon.ico", s.serveAsset("/favicon.ico"))
 
 	s.mux.HandleFunc("GET /api/status", s.auth(s.handleStatus))
 	s.mux.HandleFunc("GET /api/snapshots", s.auth(s.handleSnapshots))
@@ -138,6 +139,7 @@ func (s *Server) loadAssets() error {
 		{"/index.html", "text/html; charset=utf-8"},
 		{"/app.js", "text/javascript; charset=utf-8"},
 		{"/app.css", "text/css; charset=utf-8"},
+		{"/favicon.ico", "image/x-icon"},
 	}
 	for _, e := range entries {
 		body, err := webFS.ReadFile("web" + e.path)

@@ -1,7 +1,7 @@
 # FatTrace 项目交接文档
 
 - 更新时间：2026-11-11
-- 状态：**v1.2.0 已发布**（2026-11-11，未解释项浏览器/规则助手；发布说明 `docs/release-v1.2.0.md`）。**v1.1.0 已发布**（2026-11-11，GUI 启动器 `fatgui.exe`；发布说明 `docs/release-v1.1.0.md`）。**v1.0.2 已发布**（2026-11-11，卷级差额归因；发布说明 `docs/release-v1.0.2.md`）。**v1.0.1 已发布**（2026-11-10，采集健康告警；发布说明 `docs/release-v1.0.1.md`）。**v1.0.0 已发布**（2026-11-08，首个正式版本；发布说明 `docs/release-v1.0.0.md`）。**M0–M7b 已完成并推送**（M7 `2882f39`，M7b `5dd8bd6`）；**M8a 非侵入式加固已完成代码、测试与文档，并已推送 master**（`e461de4`，CI 修复 `47365f0`，CI 稳定化 `81273c4`，最终文档 `3d5f09c`）；GitHub Actions `windows-latest` 最终 run `41032487559` 全绿。**2026-11-05 可用性优化与 75 条规则已推送（`ba0fc8c`）**。真实采集已连续到 **2026-11-10（快照 #25 daily：487,750 文件 / 67,538 目录 / 193.80 GiB / 覆盖率 99.38% / 3 个错误；#24 于 11-09 中断后自动补跑）**；原 69 条规则下 `#10→#19`（6.4 天）解释率 **60.01%**，**未达 70% 门禁**；按用户选择保留原记录并补规则后，同一数据重算 **88.07%**（17.78/20.18 GiB，详见下文与 `docs/m8a-results.md`）。**2026-11-02 用户决定简化收尾：取消 M8b（安装器/ACL/提权任务/签名），11-05 用真实数据复核解释率作为唯一前置时间门禁；首份周报、首次文件行清理、14 天无人值守和 4 周 dogfood 改为发布后观察，不阻塞 v1.0。** 首份真实周报已于 2026-11-08 生成；计划任务已重装为电池上不启动、已开始的扫描不终止，doctor 任务检查 healthy。
+- 状态：**v1.3.0 已发布**（2026-11-12，正式图标；发布说明 `docs/release-v1.3.0.md`）。**v1.2.0 已发布**（2026-11-11，未解释项浏览器/规则助手；发布说明 `docs/release-v1.2.0.md`）。**v1.1.0 已发布**（2026-11-11，GUI 启动器 `fatgui.exe`；发布说明 `docs/release-v1.1.0.md`）。**v1.0.2 已发布**（2026-11-11，卷级差额归因；发布说明 `docs/release-v1.0.2.md`）。**v1.0.1 已发布**（2026-11-10，采集健康告警；发布说明 `docs/release-v1.0.1.md`）。**v1.0.0 已发布**（2026-11-08，首个正式版本；发布说明 `docs/release-v1.0.0.md`）。**M0–M7b 已完成并推送**（M7 `2882f39`，M7b `5dd8bd6`）；**M8a 非侵入式加固已完成代码、测试与文档，并已推送 master**（`e461de4`，CI 修复 `47365f0`，CI 稳定化 `81273c4`，最终文档 `3d5f09c`）；GitHub Actions `windows-latest` 最终 run `41032487559` 全绿。**2026-11-05 可用性优化与 75 条规则已推送（`ba0fc8c`）**。真实采集已连续到 **2026-11-10（快照 #25 daily：487,750 文件 / 67,538 目录 / 193.80 GiB / 覆盖率 99.38% / 3 个错误；#24 于 11-09 中断后自动补跑）**；原 69 条规则下 `#10→#19`（6.4 天）解释率 **60.01%**，**未达 70% 门禁**；按用户选择保留原记录并补规则后，同一数据重算 **88.07%**（17.78/20.18 GiB，详见下文与 `docs/m8a-results.md`）。**2026-11-02 用户决定简化收尾：取消 M8b（安装器/ACL/提权任务/签名），11-05 用真实数据复核解释率作为唯一前置时间门禁；首份周报、首次文件行清理、14 天无人值守和 4 周 dogfood 改为发布后观察，不阻塞 v1.0。** 首份真实周报已于 2026-11-08 生成；计划任务已重装为电池上不启动、已开始的扫描不终止，doctor 任务检查 healthy。
 - M8a 详情：`docs/m8a-results.md`。已加 doctor 自检、Host/Origin 校验、告警倍数阈值、导出泄露提示、AC-only 调度选项、README/SECURITY/CI/发布脚本；计划任务已于 2026-11-08 重装为 `LeastPrivilege + InteractiveToken + AC-only`。
 - 2026-11-02 全面修复：维护任务等锁、单快照日事件清理、报告“其他目录”虚增三处已修复并有回归测试；真实库已补跑 #15 weekly。已提交推送（`41b4f6b`）。
 - 2026-11-02 可用性优化：新增 `fat serve --open`、`fat setup` 首次引导、`fat tray` 纯 Go 托盘启动器；完整测试、Win32 图标/菜单集成测试与真实库冒烟均通过。已提交推送（`ba0fc8c`）。
@@ -18,7 +18,7 @@
 - 托盘：tooltip 与右键菜单显示健康状态；启动时若为 danger 弹出通知。
 - 真实库验证：`/api/health` 返回 `D:\ ok failures=0 lastComplete=#25 lastFailure=#24 failed`，失败原因为“进程在完成前退出或被系统终止，未写入文件记录”；状态页截图确认面板正常。
 - 发布：tag `v1.0.1`，产物 `fat-1.0.1-windows-amd64.exe`、`arm64.exe` 与 `SHA256SUMS.txt`；发布说明 `docs/release-v1.0.1.md`。
-- 后续提醒（v1.2.0+，不阻塞）：正式图标（待用户拍板）。
+- 后续提醒（v1.3.0+，不阻塞）：可选为 ≤32px 单独重画简化字形；观察 11-22 / 12-06。
 
 ### 2026-11-11 卷级差额归因（v1.0.2 已发布）
 
@@ -48,6 +48,14 @@
 - 护栏：只读 GET、规则只贴标签、草稿需确认、过宽/命中过半警告、避免单应用硬编码。预览仅估算未解释样本，不预估对已解释项影响。
 - 验证：新增聚合上限/预览/三接口测试；全量测试绿；真实库 `#19→#20` 未解释 4,105 个 / 2.43 GiB / 26.38%，SPA 截图核对。详见 `docs/unexplained-browser.md`。
 - 发布：tag `v1.2.0`；产物 fat/fatgui 双架构 + SHA256SUMS。发布说明 `docs/release-v1.2.0.md`。
+
+### 2026-11-12 正式图标（v1.3.0 已发布）
+
+- 用户选定 Gemini 候选图一“卷尺量磁盘”；源图 `assets/icon/master.png`。因描边与背景同色，透明抠图会丢描边，故用与 UI 同色（`#0b0f14`）深色圆角 tile。
+- 管线：裁切+tile→1024→Lanczos 多尺寸→Pillow ICO→`icon.rc`+`windres`→`cmd/fat/rsrc.syso`、`cmd/fatgui/rsrc.syso`（随包提交，CI 无需 windres）。
+- 托盘 `LoadIconW(instance,1)` 加载内嵌图标，失败回退 `IDI_APPLICATION`；快捷方式 `IconLocation=fatgui.exe,0`；新增 `GET /favicon.ico`（静态免 token）+ `index.html` link。
+- 验证：多尺寸深/浅底预览；`ExtractAssociatedIcon` 两 exe 32×32；gated 托盘集成测试；favicon 200；全量测试绿。详见 `docs/icon.md`。
+- 发布：tag `v1.3.0`；产物 fat/fatgui 双架构 + SHA256SUMS。发布说明 `docs/release-v1.3.0.md`。
 
 ## 0. 项目一句话
 
@@ -175,6 +183,11 @@ FatTrace/
   docs/release-v1.1.0.md        v1.1.0 发布说明
   docs/unexplained-browser.md   未解释浏览器/规则助手口径、护栏与限制（2026-11-11，v1.2.0）
   docs/release-v1.2.0.md        v1.2.0 发布说明
+  assets/icon/                  正式图标资产（master/1024/多尺寸/ICO/rc）
+  cmd/fat/rsrc.syso             内嵌图标资源（windres 生成，随包提交）
+  cmd/fatgui/rsrc.syso          内嵌图标资源（windres 生成，随包提交）
+  docs/icon.md                  图标定案、管线与限制（2026-11-12，v1.3.0）
+  docs/release-v1.3.0.md        v1.3.0 发布说明
   README.md                     快速开始、命令表、配置、隐私、限制、排障
   SECURITY.md                   安全边界、敏感数据、漏洞报告
   .github/workflows/ci.yml      windows-latest: vet / test / build / doctor 冒烟
