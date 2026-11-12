@@ -42,4 +42,4 @@ GUI 启动器版本。新增无控制台闪窗的图形入口 `fatgui.exe`，双
 - `fatgui-1.1.0-windows-arm64.exe`
 - `SHA256SUMS.txt`
 
-完整交接见 `HANDOFF.md`，GUI 启动器细节见 `docs/gui-launcher.md`。
+

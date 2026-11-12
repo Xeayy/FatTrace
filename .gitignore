@@ -1,5 +1,13 @@
 *.exe
 *.exe~
+*.exe.old
 *.test
 *.out
 /dist/
+*.db
+*.db-wal
+*.db-shm
+*.log
+reports/
+logs/
+.cache/

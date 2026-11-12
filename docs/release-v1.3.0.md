@@ -36,4 +36,4 @@
 - `fatgui-1.3.0-windows-arm64.exe`
 - `SHA256SUMS.txt`
 
-完整交接见 `HANDOFF.md`，图标细节见 `docs/icon.md`。
+
