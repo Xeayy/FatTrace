@@ -74,7 +74,7 @@
 | Go 模块缓存 | `D:\FatTraceDemo\.cache\gomod` |
 | Go 构建缓存 | `D:\FatTraceDemo\.cache\gobuild` |
 | Go 代理 | `GOPROXY=https://goproxy.cn,direct`（已验证 200；proxy.golang.org 不可达，goproxy.io 超时） |
-| Git | `git init` 已提交并推送到私有仓库 `Xeayy/FatTrace`（分支 master；M0–M2 `06d6590`，M3 `1ed8b27`，M4 `9addaa5`，M5 `c0f0172`，M6 `6e03e7c`，M7 `2882f39`，M7b `5dd8bd6`，M8a `e461de4`，CI 修复 `47365f0`，CI 稳定化 `81273c4`，v1.0.0 `9f07600`，v1.0.1 `27fbbaa`，v1.0.2 `9237186`，v1.1.0 `ab27f0e`，v1.2.0 `6dcef03`，v1.3.0 `81630ce`，当前 HEAD `81630ce`） |
+| Git | `git init` 已提交并推送到私有仓库 `Xeayy/FatTrace`（分支 master；M0–M2 `06d6590`，M3 `1ed8b27`，M4 `9addaa5`，M5 `c0f0172`，M6 `6e03e7c`，M7 `2882f39`，M7b `5dd8bd6`，M8a `e461de4`，CI 修复 `47365f0`，CI 稳定化 `81273c4`，v1.0.0 `9f07600`，v1.0.1 `27fbbaa`，v1.0.2 `9237186`，v1.1.0 `ab27f0e`，v1.2.0 `6dcef03`，v1.3.0 `81630ce`，v1.3.1 `c6c71e3`，当前 HEAD `c6c71e3`） |
 | 其他 | Node 24、Python 3.14 可用；非管理员会话 |
 
 每次新终端先执行：
