@@ -1,0 +1,9 @@
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.syso binary
+*.exe binary
+*.exe~ binary
+*.db binary
+*.db-wal binary
+*.db-shm binary
