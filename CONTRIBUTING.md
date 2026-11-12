@@ -5,6 +5,7 @@
 ## 开发环境
 
 - Windows 10/11 + Go 1.27+（纯 Go，无 CGO）。
+- 先读 [架构概览](docs/architecture.md) 了解组件与不变量。
 - 克隆后：`go vet ./...` 与 `go test ./... -count=1` 必须全绿。
 - 托盘 Win32 集成测试默认跳过，需显式开启：`FATTRACE_TRAY_UI_TEST=1 go test ./internal/tray -run ShellIcon`。
 

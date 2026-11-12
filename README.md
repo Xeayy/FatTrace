@@ -132,6 +132,10 @@ go test ./... -count=1
 
 需要 Go 1.27+。发布双架构产物见 `scripts/release.ps1`。贡献指南见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
+## English (brief)
+
+FatTrace is a **local-first Windows disk-growth tracker**: daily snapshots + weekly diffs over NTFS (FileID-aligned), rule-based explanation of growth, a read-only local Web UI / tray / single-file HTML reports. It **never deletes, moves or cleans your files**; no network, no telemetry. MIT licensed. See [docs/](docs/README.md) and [CHANGELOG](CHANGELOG.md).
+
 ## Roadmap
 
 - 可选：独立原生窗口（内嵌 WebView），不占浏览器标签。
