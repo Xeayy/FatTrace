@@ -40,20 +40,28 @@
 
 ## 一分钟上手
 
+### 方式 A：安装包安装（推荐）
+
+1. 从 [Releases](https://github.com/Xeayy/FatTrace/releases/latest) 下载安装包 `FatTrace-Setup-<版本>-windows-amd64.exe`。
+2. 双击运行安装程序完成安装（支持选择安装路径，默认安装至当前用户目录无需管理员权限，自动创建桌面与开始菜单快捷方式）。
+3. 安装完成后勾选“运行 FatTrace”或双击桌面 **FatTrace** 图标：无控制台闪窗，系统托盘常驻，并自动在默认浏览器中打开本地只读面板。
+
+### 方式 B：便携版免安装
+
 1. 从 [Releases](https://github.com/Xeayy/FatTrace/releases/latest) 下载 `fat-<版本>-windows-amd64.exe` 与 `fatgui-<版本>-windows-amd64.exe`，**放在同一目录**（可重命名为 `fat.exe` / `fatgui.exe`）。
 2. 双击 `fatgui.exe`：无控制台闪窗，启动托盘并打开本地面板。
-3. 首次按提示设置扫描根（如 `D:\`）；之后可安装计划任务自动采集。
+3. 首次使用可按界面提示配置扫描根（如 `D:\`）；亦可安装计划任务自动采集。
 
 命令行等价流程：
 
 ```powershell
 .\fat.exe setup -roots "D:\"     # 初始化数据库/配置，检查计划任务
 .\fat.exe maintain --kind daily  # 采集一次快照 + 日汇总 + 告警
-.\fat.exe tray                   # 托盘 + 只读网页（或双击 fatgui.exe）
+.\fat.exe tray                   # 托盘 + 只读网页（或双击 fatgui.exe / FatTrace.exe）
 .\fat.exe report --week          # 生成单文件 HTML 周报
 ```
 
-> 无安装器、无代码签名：首次运行可能触发 SmartScreen，选择“仍要运行”即可。无需管理员权限。
+> 无代码签名：未购买商业证书前首次运行可能触发 SmartScreen，选择“更多信息”→“仍要运行”即可。无需管理员权限。
 
 ## 隐私与安全
 

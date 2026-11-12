@@ -26,7 +26,7 @@ func main() {
 	}
 	fatPath := filepath.Join(filepath.Dir(exe), "fat.exe")
 	if _, err := os.Stat(fatPath); err != nil {
-		tray.ErrorBox("FatTrace", "找不到 fat.exe：\n"+fatPath+"\n\n请把 fatgui.exe 与 fat.exe 放在同一目录。")
+		tray.ErrorBox("FatTrace", "找不到 fat.exe：\n"+fatPath+"\n\n请确保 FatTrace.exe 与 fat.exe 位于同一目录下。")
 		os.Exit(1)
 	}
 

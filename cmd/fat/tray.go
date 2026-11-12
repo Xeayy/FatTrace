@@ -17,6 +17,7 @@ import (
 	"fattrace/internal/config"
 	"fattrace/internal/health"
 	"fattrace/internal/schedule"
+	"fattrace/internal/store"
 	"fattrace/internal/tray"
 )
 
@@ -66,10 +67,13 @@ func trayCmd(args []string) {
 		fail(err)
 	}
 	if _, err := os.Stat(path); err != nil {
-		msg := fmt.Sprintf("找不到数据库：\n%s\n\n请先在命令行运行：\nfat setup -roots \"D:\\\"", path)
-		fmt.Fprintln(os.Stderr, msg)
-		tray.ErrorBox("FatTrace", msg)
-		os.Exit(1)
+		// First-run automatic initialization: create database & tables if missing
+		s, sErr := store.OpenWait(path, 30*time.Second)
+		if sErr != nil {
+			tray.ErrorBox("FatTrace", fmt.Sprintf("初始化数据库失败：\n%s\n\n%v", path, sErr))
+			os.Exit(1)
+		}
+		_ = s.Close()
 	}
 	release, already, err := tray.AcquireSingleInstance(`Local\FatTraceTray`)
 	if err != nil {

@@ -3,7 +3,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[0-9A-Za-z._-]+$')]
-    [string]$Version
+    [string]$Version,
+    [switch]$SkipInstaller
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,6 +33,39 @@ foreach ($arch in @("amd64", "arm64")) {
     go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=$Version" -o $guiOut ./cmd/fatgui
     if ($LASTEXITCODE -ne 0) { throw "go build failed for windows/$arch (fatgui)" }
     $artifacts += $guiName
+}
+
+# Optional installer build via Inno Setup
+if (-not $SkipInstaller) {
+    $isccCmd = Get-Command iscc -ErrorAction SilentlyContinue
+    $iscc = if ($isccCmd) { $isccCmd.Source } else { $null }
+    if (-not $iscc) {
+        $candidates = @(
+            "D:\Work_Space_for_AI\Qoder_CN\tools\innosetup\ISCC.exe",
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles}\Inno Setup 7\ISCC.exe",
+            "${env:LOCALAPPDATA}\Programs\Inno Setup 6\ISCC.exe",
+            "${env:LOCALAPPDATA}\Programs\Inno Setup 7\ISCC.exe"
+        )
+        foreach ($c in $candidates) {
+            if (Test-Path $c) {
+                $iscc = $c
+                break
+            }
+        }
+    }
+    if ($iscc) {
+        Write-Host "building installer via Inno Setup ($iscc)"
+        & $iscc "/dMyAppVersion=$Version" "/dMyAppArch=amd64" (Join-Path $PSScriptRoot "installer.iss")
+        if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed" }
+        $installerName = "FatTrace-Setup-$Version-windows-amd64.exe"
+        if (Test-Path (Join-Path $dist $installerName)) {
+            $artifacts += $installerName
+        }
+    } else {
+        Write-Warning "ISCC.exe not found; skipping installer package generation"
+    }
 }
 
 $sums = Join-Path $dist "SHA256SUMS.txt"
