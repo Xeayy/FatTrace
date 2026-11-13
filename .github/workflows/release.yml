@@ -34,7 +34,9 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          # 发布产物必须用打了 net/http 补丁的 Go 1.27.4+
+          go-version: "1.27.x"
+          check-latest: true
           cache: true
 
       - name: Install Inno Setup

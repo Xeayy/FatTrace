@@ -155,7 +155,7 @@ go vet ./...
 go test ./... -count=1
 ```
 
-需要 Go 1.27+。发布双架构产物见 `scripts/release.ps1`。贡献指南见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+需要 **Go 1.27.4+**（1.27.0–1.27.3 的标准库 `net/http` 有已知漏洞）。发布双架构产物见 `scripts/release.ps1`。贡献指南见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## English (brief)
 

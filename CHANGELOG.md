@@ -9,6 +9,7 @@ All notable changes to FatTrace. Format follows [Keep a Changelog](https://keepa
 - `docs/release-template.md`; the release workflow can be started manually and tolerates a missing release body.
 ### Changed
 - `fat version` falls back to Go build info, so `go install` builds report the module version instead of `0.1.0-dev`.
+- CI and release builds use the latest Go 1.27.x patch (1.27.4+) to pick up `net/http` security fixes.
 - CI runs `govulncheck` and builds every package.
 
 ## [1.3.1] - 2026-11-12
