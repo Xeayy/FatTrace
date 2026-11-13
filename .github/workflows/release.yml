@@ -3,6 +3,12 @@ name: release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "已存在的 tag（例如 v1.3.1）"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -13,23 +19,52 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Resolve tag and version
+        id: meta
+        shell: pwsh
+        run: |
+          $tag = "${{ inputs.tag }}"
+          if (-not $tag) { $tag = $env:GITHUB_REF_NAME }
+          if ($tag -notmatch '^v\d+\.\d+\.\d+') { throw "release tag must look like vX.Y.Z, got '$tag'" }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "version=$($tag -replace '^v','')" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
+
       - name: Install Inno Setup
         run: choco install innosetup -y
+
       - name: Build dual-arch artifacts and installer
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version "${{ steps.meta.outputs.version }}"
+
+      - name: Prepare release body
+        shell: pwsh
         run: |
-          $ver = $env:GITHUB_REF_NAME -replace '^v',''
-          powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version $ver
+          $tag = "${{ steps.meta.outputs.tag }}"
+          $src = "docs/release-$tag.md"
+          $dst = "dist/release-body.md"
+          if (Test-Path $src) {
+            Copy-Item $src $dst
+          } else {
+            Write-Host "::warning::$src not found; publishing with generated release notes only"
+            Set-Content -Path $dst -Value "" -Encoding utf8
+          }
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: FatTrace ${{ steps.meta.outputs.tag }}
           files: |
             dist/*.exe
             dist/SHA256SUMS.txt
-          # 发布正文直接取 docs/release-<tag>.md（UTF-8），
-          # 避免手工上传正文时中文被转码成问号
-          body_path: docs/release-${{ github.ref_name }}.md
+          # 正文取 docs/release-<tag>.md（UTF-8）；缺失时退化为仅自动生成说明
+          body_path: dist/release-body.md
           generate_release_notes: true

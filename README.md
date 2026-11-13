@@ -61,6 +61,23 @@
 .\fat.exe report --week          # 生成单文件 HTML 周报
 ```
 
+### 方式 C：Go 源码安装
+
+```powershell
+go install github.com/Xeayy/FatTrace/cmd/fat@latest
+```
+
+只构建命令行 `fat`（GUI 启动器需要 `-H windowsgui` 链接参数，请用安装包或便携版）。产物在 `%USERPROFILE%\go\bin\fat.exe`，确保该目录在 `PATH` 中。`fat --version` 会显示模块版本。
+
+### 校验下载文件（可选）
+
+```powershell
+Get-Content .\SHA256SUMS.txt | ForEach-Object {
+  $hash, $name = $_ -split '  ', 2
+  if ((Get-FileHash $name -Algorithm SHA256).Hash -ieq $hash) { "OK  $name" } else { "BAD $name" }
+}
+```
+
 > 无代码签名：未购买商业证书前首次运行可能触发 SmartScreen，选择“更多信息”→“仍要运行”即可。无需管理员权限。
 
 ## 隐私与安全

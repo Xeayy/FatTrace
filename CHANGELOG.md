@@ -2,6 +2,15 @@
 
 All notable changes to FatTrace. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+### Added
+- Module path is now `github.com/Xeayy/FatTrace`; `go install github.com/Xeayy/FatTrace/cmd/fat@latest` works.
+- `fat --version` / `fat -v` are accepted in addition to `fat version`.
+- `docs/release-template.md`; the release workflow can be started manually and tolerates a missing release body.
+### Changed
+- `fat version` falls back to Go build info, so `go install` builds report the module version instead of `0.1.0-dev`.
+- CI runs `govulncheck` and builds every package.
+
 ## [1.3.1] - 2026-11-12
 ### Added
 - Windows installer `FatTrace-Setup-<ver>-windows-amd64.exe` (Inno Setup): wizard install, per-user by default without admin rights, desktop & Start Menu shortcuts, uninstaller, launch-after-install with tray + dashboard.

@@ -25,12 +25,18 @@ jobs:
           if ($bad) { Write-Host "gofmt needed:"; Write-Host $bad; exit 1 }
       - name: Vet
         run: go vet ./...
+      - name: Build all packages
+        run: go build ./...
       - name: Test
         run: go test ./... -count=1
       - name: Build
         run: go build -trimpath -ldflags "-s -w -X main.version=ci" -o fat.exe ./cmd/fat
       - name: Build GUI launcher
         run: go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=ci" -o fatgui.exe ./cmd/fatgui
+      - name: Vulnerability scan
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
       - name: Subsystem check
         run: |
           $out = go run ./scripts/pecheck fat.exe fatgui.exe
