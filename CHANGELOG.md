@@ -2,6 +2,10 @@
 
 All notable changes to FatTrace. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+### Changed
+- `go.mod` now requires Go 1.27.4, so source builds cannot silently use the `net/http` versions with known advisories. CI and release builds already used the latest 1.27.x patch.
+
 ## [1.4.0] - 2026-11-13
 ### Added
 - Module path is now `github.com/Xeayy/FatTrace`; `go install github.com/Xeayy/FatTrace/cmd/fat@latest` works.
