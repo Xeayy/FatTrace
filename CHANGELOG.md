@@ -3,6 +3,8 @@
 All notable changes to FatTrace. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
 ## [1.3.1] - 2026-11-12
+### Added
+- Windows installer `FatTrace-Setup-<ver>-windows-amd64.exe` (Inno Setup): wizard install, per-user by default without admin rights, desktop & Start Menu shortcuts, uninstaller, launch-after-install with tray + dashboard.
 ### Changed
 - Icon: dedicated simplified glyph for 16/24/32 px (mixed-size ICO); ≥48 px uses the master artwork. Fixes blurry tray/taskbar icons.
 

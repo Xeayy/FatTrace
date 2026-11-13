@@ -50,7 +50,7 @@
 
 1. 从 [Releases](https://github.com/Xeayy/FatTrace/releases/latest) 下载 `fat-<版本>-windows-amd64.exe` 与 `fatgui-<版本>-windows-amd64.exe`，**放在同一目录**（可重命名为 `fat.exe` / `fatgui.exe`）。
 2. 双击 `fatgui.exe`：无控制台闪窗，启动托盘并打开本地面板。
-3. 首次使用可按界面提示配置扫描根（如 `D:\`）；亦可安装计划任务自动采集。
+3. 首次使用请运行 `fat.exe setup -roots "D:\"` 配置扫描根（面板会提示“未配置”，界面本身只读）；亦可安装计划任务自动采集。
 
 命令行等价流程：
 

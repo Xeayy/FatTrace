@@ -12,7 +12,7 @@
 - 汇总见根目录 [CHANGELOG.md](../CHANGELOG.md)。
 
 ## 历史实测记录（开发过程档案）
-m0–m7b 为各里程碑的实测记录，保留作技术档案；文中路径已替换为示例路径，数字为当时真实测量。
+m0–m7b 为各里程碑的实测记录，保留作技术档案；文中路径已替换为示例路径，数字为当时实测（m0/m7 的部分数字为约数）。
 - [m0](m0-results.md) 扫描器 · [m1](m1-results.md) 存储 · [m2](m2-results.md) 快照流水线 · [m3](m3-results.md) diff 引擎 · [m4](m4-results.md) 周报 · [m5](m5-results.md) 本地 Web · [m6](m6-results.md) 规则解释 · [m7](m7-results.md) 调度/保留/告警 · [m7b](m7b-results.md) 存储预算/自动周报
 
 ## 其它
