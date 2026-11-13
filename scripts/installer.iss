@@ -61,6 +61,7 @@ Source: "..\dist\fat-{#MyAppVersion}-windows-{#MyAppArch}.exe"; DestDir: "{app}"
 ; Documentation & license
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\README.zh-CN.md"; DestDir: "{app}"; Flags: ignoreversion
 ; Icon assets
 Source: "..\assets\icon\fattrace.ico"; DestDir: "{app}\assets\icon"; Flags: ignoreversion
 

@@ -4,6 +4,7 @@ All notable changes to FatTrace. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 ### Changed
+- Default README is now English (`README.md`); the Chinese version lives in `README.zh-CN.md`. Both link to each other at the top.
 - `go.mod` now requires Go 1.27.4, so source builds cannot silently use the `net/http` versions with known advisories. CI and release builds already used the latest 1.27.x patch.
 
 ## [1.4.0] - 2026-11-13
