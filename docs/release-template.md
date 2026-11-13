@@ -31,6 +31,7 @@
 ## 产物
 
 - `FatTrace-Setup-X.Y.Z-windows-amd64.exe`（Windows 安装包，**推荐**）
+- `FatTrace-Setup-X.Y.Z-windows-arm64.exe`（ARM64 安装包）
 - `fat-X.Y.Z-windows-amd64.exe` / `arm64.exe`
 - `fatgui-X.Y.Z-windows-amd64.exe` / `arm64.exe`
 - `SHA256SUMS.txt`

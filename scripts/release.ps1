@@ -55,12 +55,16 @@ if (-not $SkipInstaller) {
         }
     }
     if ($iscc) {
-        Write-Host "building installer via Inno Setup ($iscc)"
-        & $iscc "/dMyAppVersion=$Version" "/dMyAppArch=amd64" (Join-Path $PSScriptRoot "installer.iss")
-        if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed" }
-        $installerName = "FatTrace-Setup-$Version-windows-amd64.exe"
-        if (Test-Path (Join-Path $dist $installerName)) {
-            $artifacts += $installerName
+        foreach ($installerArch in @("amd64", "arm64")) {
+            Write-Host "building installer ($installerArch) via Inno Setup ($iscc)"
+            & $iscc "/dMyAppVersion=$Version" "/dMyAppArch=$installerArch" (Join-Path $PSScriptRoot "installer.iss")
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed for $installerArch" }
+            $installerName = "FatTrace-Setup-$Version-windows-$installerArch.exe"
+            if (Test-Path (Join-Path $dist $installerName)) {
+                $artifacts += $installerName
+            } else {
+                Write-Warning "installer $installerName was not produced"
+            }
         }
     } else {
         Write-Warning "ISCC.exe not found; skipping installer package generation"

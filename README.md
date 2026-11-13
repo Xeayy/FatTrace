@@ -42,7 +42,7 @@
 
 ### 方式 A：安装包安装（推荐）
 
-1. 从 [Releases](https://github.com/Xeayy/FatTrace/releases/latest) 下载安装包 `FatTrace-Setup-<版本>-windows-amd64.exe`。
+1. 从 [Releases](https://github.com/Xeayy/FatTrace/releases/latest) 下载安装包 `FatTrace-Setup-<版本>-windows-amd64.exe`（ARM64 设备选 `-arm64`）。
 2. 双击运行安装程序完成安装（支持选择安装路径，默认安装至当前用户目录无需管理员权限，自动创建桌面与开始菜单快捷方式）。
 3. 安装完成后勾选“运行 FatTrace”或双击桌面 **FatTrace** 图标：无控制台闪窗，系统托盘常驻，并自动在默认浏览器中打开本地只读面板。
 
@@ -160,6 +160,8 @@ go test ./... -count=1
 ## English (brief)
 
 FatTrace is a **local-first Windows disk-growth tracker**: daily snapshots + weekly diffs over NTFS (FileID-aligned), rule-based explanation of growth, a read-only local Web UI / tray / single-file HTML reports. It **never deletes, moves or cleans your files**; no network, no telemetry. MIT licensed. See [docs/](docs/README.md) and [CHANGELOG](CHANGELOG.md).
+
+Full English documentation: [README.en.md](README.en.md).
 
 ## Roadmap
 
