@@ -16,7 +16,7 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"fattrace/internal/config"
+	"github.com/Xeayy/FatTrace/internal/config"
 )
 
 const (

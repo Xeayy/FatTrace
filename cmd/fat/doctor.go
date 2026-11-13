@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 
-	"fattrace/internal/doctor"
+	"github.com/Xeayy/FatTrace/internal/doctor"
 )
 
 func doctorCmd(args []string) {

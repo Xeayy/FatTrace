@@ -20,10 +20,10 @@ import (
 	"sync"
 	"time"
 
-	"fattrace/internal/config"
-	"fattrace/internal/model"
-	"fattrace/internal/rules"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/config"
+	"github.com/Xeayy/FatTrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/rules"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 //go:embed web

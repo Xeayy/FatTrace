@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 // ErrSnapshotNotFound reports an unknown or filtered-out snapshot id.

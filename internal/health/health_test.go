@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 func snap(id int64, status string, started time.Time, files, dirs, errors int64) store.SnapshotInfo {

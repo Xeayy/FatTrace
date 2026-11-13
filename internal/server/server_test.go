@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"fattrace/internal/config"
-	"fattrace/internal/diff"
-	"fattrace/internal/health"
-	"fattrace/internal/model"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/config"
+	"github.com/Xeayy/FatTrace/internal/diff"
+	"github.com/Xeayy/FatTrace/internal/health"
+	"github.com/Xeayy/FatTrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 const testToken = "0123456789abcdef0123456789abcdef"

@@ -3,7 +3,7 @@ package diff
 import (
 	"testing"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 func TestOnFileChangeSeesEveryPath(t *testing.T) {

@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"fattrace/internal/server"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/server"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 func serveCmd(args []string) {

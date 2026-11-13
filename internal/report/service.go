@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"fattrace/internal/diff"
-	"fattrace/internal/rules"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/diff"
+	"github.com/Xeayy/FatTrace/internal/rules"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 // Options selects the snapshot pair and report size. Snapshot resolution,

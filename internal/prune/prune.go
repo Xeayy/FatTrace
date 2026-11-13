@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"fattrace/internal/config"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/config"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 // Snapshot is one candidate shown in the dry-run plan.

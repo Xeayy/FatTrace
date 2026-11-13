@@ -10,9 +10,9 @@ import (
 	"os"
 	"time"
 
-	"fattrace/internal/config"
-	"fattrace/internal/prune"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/config"
+	"github.com/Xeayy/FatTrace/internal/prune"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 func pruneCmd(args []string) {

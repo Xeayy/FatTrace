@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 func file(frn, parent uint64, name string, size, alloc int64) model.FileRecord {

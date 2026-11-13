@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"fattrace/internal/diff"
-	"fattrace/internal/model"
-	"fattrace/internal/rules"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/diff"
+	"github.com/Xeayy/FatTrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/rules"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 // Options controls which days are recomputed.

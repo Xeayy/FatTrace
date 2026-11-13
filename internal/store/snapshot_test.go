@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 func commitStaged(t *testing.T, s *Store, volumeID int64, recs []model.FileRecord) int64 {

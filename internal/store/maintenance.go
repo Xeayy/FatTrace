@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 func (s *Store) requireWriter() error {

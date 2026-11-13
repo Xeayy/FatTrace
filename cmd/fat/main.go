@@ -9,15 +9,21 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"runtime/debug"
+	"strings"
 	"sync/atomic"
 	"time"
 
-	"fattrace/internal/model"
-	"fattrace/internal/scan"
+	"github.com/Xeayy/FatTrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/scan"
 )
 
+// devVersion is reported when no version was injected at build time and the
+// Go toolchain did not record one either (plain `go build`).
+const devVersion = "0.1.0-dev"
+
 // version is overridden at build time with -ldflags "-X main.version=...".
-var version = "0.1.0-dev"
+var version = devVersion
 
 func main() {
 	args := os.Args[1:]
@@ -63,8 +69,8 @@ func main() {
 		doctorCmd(args[1:])
 	case "status":
 		statusCmd(args[1:])
-	case "version":
-		fmt.Println(version)
+	case "version", "--version", "-version", "-v":
+		fmt.Println(resolveVersion())
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -72,6 +78,23 @@ func main() {
 		usage()
 		os.Exit(2)
 	}
+}
+
+// resolveVersion prefers the version injected with -ldflags at build time and
+// falls back to the module version recorded by the Go toolchain. That keeps
+// `go install github.com/Xeayy/FatTrace/cmd/fat@latest` reporting the real
+// release instead of the development placeholder.
+func resolveVersion() string {
+	if version != "" && version != devVersion {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		v := info.Main.Version
+		if v != "" && v != "(devel)" {
+			return strings.TrimPrefix(v, "v")
+		}
+	}
+	return version
 }
 
 func usage() {
@@ -95,7 +118,7 @@ usage:
   fat maintain [flags]
   fat doctor [--json] [--skip-tasks] [--strict] [--db path]
   fat status [--json] [--db path]
-  fat version
+  fat version | fat --version | fat -v
 
 scan flags:
   -json            output JSON

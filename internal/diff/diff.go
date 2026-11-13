@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 type candidateKey struct {

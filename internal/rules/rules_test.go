@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 func TestBuiltinRulesLoad(t *testing.T) {

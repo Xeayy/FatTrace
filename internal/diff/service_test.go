@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"fattrace/internal/model"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 func newStore(t *testing.T) *store.Store {

@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"fattrace/internal/config"
-	"fattrace/internal/schedule"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/config"
+	"github.com/Xeayy/FatTrace/internal/schedule"
+	"github.com/Xeayy/FatTrace/internal/store"
 
 	"github.com/mattn/go-isatty"
 	"golang.org/x/sys/windows"

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 func TestUnexplainedStoreLimit(t *testing.T) {

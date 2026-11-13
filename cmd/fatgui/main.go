@@ -15,7 +15,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"fattrace/internal/tray"
+	"github.com/Xeayy/FatTrace/internal/tray"
 )
 
 func main() {

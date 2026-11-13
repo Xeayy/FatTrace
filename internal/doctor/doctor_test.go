@@ -13,8 +13,8 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"fattrace/internal/config"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/config"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 type fixture struct {

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"fattrace/internal/config"
-	"fattrace/internal/model"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/config"
+	"github.com/Xeayy/FatTrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 const (

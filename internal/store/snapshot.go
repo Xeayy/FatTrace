@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 const updateSnapshotSQL = `UPDATE snapshots SET

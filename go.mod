@@ -1,4 +1,4 @@
-module fattrace
+module github.com/Xeayy/FatTrace
 
 go 1.27.0
 

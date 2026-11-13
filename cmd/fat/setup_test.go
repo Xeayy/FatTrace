@@ -5,7 +5,7 @@ package main
 import (
 	"testing"
 
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 func TestSplitRoots(t *testing.T) {

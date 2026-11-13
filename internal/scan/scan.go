@@ -12,7 +12,7 @@ import (
 	"time"
 	"unsafe"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 type Options struct {

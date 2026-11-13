@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"fattrace/internal/model"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 var dataRE = regexp.MustCompile(`(?s)<script id="report-data" type="application/json">(.*?)</script>`)

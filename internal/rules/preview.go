@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 // CategoryInfo is one selectable rule category for the read-only UI.

@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"os"
 
-	"fattrace/internal/config"
-	"fattrace/internal/schedule"
+	"github.com/Xeayy/FatTrace/internal/config"
+	"github.com/Xeayy/FatTrace/internal/schedule"
 )
 
 func scheduleCmd(args []string) {

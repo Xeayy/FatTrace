@@ -14,11 +14,11 @@ import (
 	"syscall"
 	"time"
 
-	"fattrace/internal/config"
-	"fattrace/internal/health"
-	"fattrace/internal/schedule"
-	"fattrace/internal/store"
-	"fattrace/internal/tray"
+	"github.com/Xeayy/FatTrace/internal/config"
+	"github.com/Xeayy/FatTrace/internal/health"
+	"github.com/Xeayy/FatTrace/internal/schedule"
+	"github.com/Xeayy/FatTrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/tray"
 )
 
 const (

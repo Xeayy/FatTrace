@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 const (

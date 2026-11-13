@@ -12,7 +12,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 type weeklyFixture struct {

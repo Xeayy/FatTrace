@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"fattrace/internal/config"
+	"github.com/Xeayy/FatTrace/internal/config"
 )
 
 func configCmd(args []string) {

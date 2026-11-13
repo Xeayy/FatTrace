@@ -6,9 +6,9 @@ import (
 	"math"
 	"sort"
 
-	"fattrace/internal/diff"
-	"fattrace/internal/model"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/diff"
+	"github.com/Xeayy/FatTrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 const (

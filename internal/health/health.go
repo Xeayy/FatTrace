@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 // Level is the worst state of one root.

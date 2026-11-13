@@ -15,13 +15,13 @@ import (
 	"strings"
 	"time"
 
-	"fattrace/internal/config"
-	"fattrace/internal/health"
-	"fattrace/internal/model"
-	"fattrace/internal/rules"
-	"fattrace/internal/scan"
-	"fattrace/internal/schedule"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/config"
+	"github.com/Xeayy/FatTrace/internal/health"
+	"github.com/Xeayy/FatTrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/rules"
+	"github.com/Xeayy/FatTrace/internal/scan"
+	"github.com/Xeayy/FatTrace/internal/schedule"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 // Level is the outcome of one check.

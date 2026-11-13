@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"fattrace/internal/diff"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/diff"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 // TestRealDBLatencyP95 is the M5 performance gate. It is skipped unless

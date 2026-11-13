@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"os"
 
-	"fattrace/internal/daily"
-	"fattrace/internal/rules"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/daily"
+	"github.com/Xeayy/FatTrace/internal/rules"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 func dailyCmd(args []string) {

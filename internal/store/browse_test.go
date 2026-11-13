@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 func seedBrowseSnapshot(t *testing.T, s *Store, vol int64, root, status string, unknown map[uint64]bool, recs []model.FileRecord) int64 {

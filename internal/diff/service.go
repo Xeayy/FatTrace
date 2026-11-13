@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"fattrace/internal/model"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 // Options selects the snapshot pair. Zero IDs resolve automatically: to is the

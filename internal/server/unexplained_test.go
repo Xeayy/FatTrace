@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"testing"
 
-	"fattrace/internal/model"
-	"fattrace/internal/rules"
+	"github.com/Xeayy/FatTrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/rules"
 )
 
 func TestUnexplainedEndpoint(t *testing.T) {

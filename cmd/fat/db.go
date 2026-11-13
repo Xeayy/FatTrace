@@ -11,7 +11,7 @@ import (
 	"os"
 	"time"
 
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 func dbCmd(args []string) {

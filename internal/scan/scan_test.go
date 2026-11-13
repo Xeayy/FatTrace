@@ -12,7 +12,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 func writeSizedFile(t *testing.T, path string, size int) {

@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 func newStore(t *testing.T) *store.Store {

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 // ErrDirNotFound reports an unknown directory FRN inside a snapshot.

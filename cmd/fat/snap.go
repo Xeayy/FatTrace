@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"fattrace/internal/snap"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/snap"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 // The Go syscall package does not export SIGBREAK; the Windows runtime still

@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"fattrace/internal/alerts"
-	"fattrace/internal/diff"
-	"fattrace/internal/health"
-	"fattrace/internal/model"
-	"fattrace/internal/rules"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/alerts"
+	"github.com/Xeayy/FatTrace/internal/diff"
+	"github.com/Xeayy/FatTrace/internal/health"
+	"github.com/Xeayy/FatTrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/rules"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {

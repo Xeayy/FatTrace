@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"fattrace/internal/report"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/report"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 func reportCmd(args []string) {

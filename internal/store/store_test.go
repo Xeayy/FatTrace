@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"fattrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/model"
 )
 
 func testStore(t *testing.T) (*Store, string) {

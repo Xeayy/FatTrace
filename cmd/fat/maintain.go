@@ -14,16 +14,16 @@ import (
 	"strings"
 	"time"
 
-	"fattrace/internal/alerts"
-	"fattrace/internal/config"
-	"fattrace/internal/daily"
-	"fattrace/internal/health"
-	"fattrace/internal/logfile"
-	"fattrace/internal/prune"
-	"fattrace/internal/report"
-	"fattrace/internal/rules"
-	"fattrace/internal/snap"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/alerts"
+	"github.com/Xeayy/FatTrace/internal/config"
+	"github.com/Xeayy/FatTrace/internal/daily"
+	"github.com/Xeayy/FatTrace/internal/health"
+	"github.com/Xeayy/FatTrace/internal/logfile"
+	"github.com/Xeayy/FatTrace/internal/prune"
+	"github.com/Xeayy/FatTrace/internal/report"
+	"github.com/Xeayy/FatTrace/internal/rules"
+	"github.com/Xeayy/FatTrace/internal/snap"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 // maintainReport is the JSON result of one scheduled maintenance run.

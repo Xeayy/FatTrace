@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"fattrace/internal/alerts"
-	"fattrace/internal/config"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/alerts"
+	"github.com/Xeayy/FatTrace/internal/config"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 func alertsCmd(args []string) {

@@ -7,9 +7,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"fattrace/internal/model"
-	"fattrace/internal/scan"
-	"fattrace/internal/store"
+	"github.com/Xeayy/FatTrace/internal/model"
+	"github.com/Xeayy/FatTrace/internal/scan"
+	"github.com/Xeayy/FatTrace/internal/store"
 )
 
 type Options struct {
