@@ -44,7 +44,8 @@ ArchitecturesInstallIn64BitMode=x64compatible
 #endif
 
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+; ChineseSimplified.isl 随仓库提供（Inno Setup 官方发行版不自带简体中文）
+Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
