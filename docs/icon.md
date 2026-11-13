@@ -30,6 +30,11 @@
 
 原稿直接缩放到 16/24/32 会发糊（刻度/高光/hub 糊成一团）。v1.3.1 为 ≤32px 单独重画简化字形：蓝盘 + 橙色卷尺带 + 尾，无刻度/高光/hub；≥48px 仍用原稿。ICO 为混合打包（16/24/32 简化 + 48/64/128/256 原稿，PNG entry）。源 `fattrace-small-1024.png`，对比 `preview-small.png`。深/浅底 16/24/32 均清晰可辨。
 
+## 仓库社交预览图（v1.4.0）
+
+`assets/social-preview.png`（1280×640）：深色底 + 橙色竖条 + 图标 + 标题/副标题/标语。
+GitHub 的 Social preview 只能在仓库 **Settings → General → Social preview** 网页手动上传，API 不支持。
+
 ## 限制
 
 - 图标色为稿面蓝/橙，与 UI 的青/琥珀略有差异；tile 底与 UI 同色。

@@ -8,7 +8,7 @@
 - [卷级差额归因](volume-gap-attribution.md) — 区分不可见系统区域与文件统计差额。
 
 ## 发布说明
-- [v1.3.1](release-v1.3.1.md) · [v1.3.0](release-v1.3.0.md) · [v1.2.0](release-v1.2.0.md) · [v1.1.0](release-v1.1.0.md) · [v1.0.2](release-v1.0.2.md) · [v1.0.1](release-v1.0.1.md) · [v1.0.0](release-v1.0.0.md)
+- [v1.4.0](release-v1.4.0.md) · [v1.3.1](release-v1.3.1.md) · [v1.3.0](release-v1.3.0.md) · [v1.2.0](release-v1.2.0.md) · [v1.1.0](release-v1.1.0.md) · [v1.0.2](release-v1.0.2.md) · [v1.0.1](release-v1.0.1.md) · [v1.0.0](release-v1.0.0.md)
 - 汇总见根目录 [CHANGELOG.md](../CHANGELOG.md)。
 
 ## 历史实测记录（开发过程档案）

@@ -2,16 +2,19 @@
 
 All notable changes to FatTrace. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [Unreleased]
+## [1.4.0] - 2026-11-13
 ### Added
 - Module path is now `github.com/Xeayy/FatTrace`; `go install github.com/Xeayy/FatTrace/cmd/fat@latest` works.
 - `fat --version` / `fat -v` are accepted in addition to `fat version`.
-- `docs/release-template.md`; the release workflow can be started manually and tolerates a missing release body.
 - ARM64 installer (`FatTrace-Setup-<ver>-windows-arm64.exe`); `release.ps1` builds both architectures.
+- `README.en.md` (full English documentation) and `docs/release-template.md`.
+- The release workflow can be started manually and tolerates a missing release body.
 ### Changed
 - `fat version` falls back to Go build info, so `go install` builds report the module version instead of `0.1.0-dev`.
 - CI and release builds use the latest Go 1.27.x patch (1.27.4+) to pick up `net/http` security fixes.
-- CI runs `govulncheck` and builds every package.
+- CI runs `govulncheck`, `go build ./...` and the full test suite.
+### Fixed
+- v1.3.1 release assets were rebuilt with Go 1.27.4 to clear the standard-library advisories.
 
 ## [1.3.1] - 2026-11-12
 ### Added

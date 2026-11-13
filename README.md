@@ -149,8 +149,8 @@ Get-Content .\SHA256SUMS.txt | ForEach-Object {
 ```powershell
 git clone https://github.com/Xeayy/FatTrace.git
 cd FatTrace
-go build -trimpath -ldflags "-s -w -X main.version=1.3.1" -o fat.exe .\cmd\fat
-go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=1.3.1" -o fatgui.exe .\cmd\fatgui
+go build -trimpath -ldflags "-s -w -X main.version=1.4.0" -o fat.exe .\cmd\fat
+go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=1.4.0" -o fatgui.exe .\cmd\fatgui
 go vet ./...
 go test ./... -count=1
 ```
