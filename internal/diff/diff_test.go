@@ -306,12 +306,12 @@ func TestLongUnicodePaths(t *testing.T) {
 	res := Compute(Input{
 		FromDirs: []model.SnapshotDir{
 			dir(1, 0, `D:\`, 0, 0, 0),
-			dir(2, 1, "资料", 0, 0, 0),
+			dir(2, 1, "示例", 0, 0, 0),
 			dir(3, 2, "2026年", 0, 0, 0),
 		},
 		ToDirs: []model.SnapshotDir{
 			dir(1, 0, `D:\`, 4096, 1024, 1),
-			dir(2, 1, "资料", 4096, 1024, 1),
+			dir(2, 1, "示例", 4096, 1024, 1),
 			dir(3, 2, "2026年", 4096, 1024, 1),
 		},
 		ToFiles: []model.FileRecord{file(10, 3, "报告-最终版.docx", 1024, 4096)},
