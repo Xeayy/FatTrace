@@ -41,7 +41,6 @@ if (-not $SkipInstaller) {
     $iscc = if ($isccCmd) { $isccCmd.Source } else { $null }
     if (-not $iscc) {
         $candidates = @(
-            "D:\FatTraceDemo\tools\innosetup\ISCC.exe",
             "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
             "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
             "${env:ProgramFiles}\Inno Setup 7\ISCC.exe",
