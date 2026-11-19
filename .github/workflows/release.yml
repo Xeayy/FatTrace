@@ -32,7 +32,7 @@ jobs:
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "version=$($tag -replace '^v','')" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           # 发布产物必须用打了 net/http 补丁的 Go 1.27.4+
           go-version: "1.27.x"
